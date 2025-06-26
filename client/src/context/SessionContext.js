@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from "react";
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from "react";
 import { apiService } from "../services/apiService";
 
 const SessionContext = createContext();
@@ -108,22 +108,42 @@ function sessionReducer(state, action) {
 export function SessionProvider({ children }) {
   const [state, dispatch] = useReducer(sessionReducer, initialState);
 
-  // Load sessions and current session from localStorage on mount
-  useEffect(() => {
-    loadSessions();
-    loadCurrentSessionFromStorage();
+  const setLoading = useCallback((loading) => {
+    dispatch({ type: SESSION_ACTIONS.SET_LOADING, payload: loading });
   }, []);
 
-  // Save current session to localStorage whenever it changes
-  useEffect(() => {
-    if (state.currentSession) {
-      localStorage.setItem("vortex_current_session_id", state.currentSession.id);
-      localStorage.setItem("vortex_current_session", JSON.stringify(state.currentSession));
-    }
-  }, [state.currentSession]);
+  const setError = useCallback((error) => {
+    dispatch({ type: SESSION_ACTIONS.SET_ERROR, payload: error });
+  }, []);
 
-  // Load current session from localStorage
-  const loadCurrentSessionFromStorage = async () => {
+  const loadSession = useCallback(
+    async (sessionId) => {
+      try {
+        setLoading(true);
+        const session = await apiService.getSession(sessionId);
+        dispatch({ type: SESSION_ACTIONS.SET_CURRENT_SESSION, payload: session });
+        return session;
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading, setError]
+  );
+
+  const loadSessions = useCallback(async () => {
+    try {
+      const sessions = await apiService.getAllSessions();
+      dispatch({ type: SESSION_ACTIONS.SET_SESSIONS_LIST, payload: sessions });
+    } catch (error) {
+      console.error("Failed to load sessions:", error);
+      // Don't set error for this as it's background loading
+    }
+  }, []);
+
+  const loadCurrentSessionFromStorage = useCallback(async () => {
     try {
       const sessionId = localStorage.getItem("vortex_current_session_id");
       if (sessionId) {
@@ -136,156 +156,157 @@ export function SessionProvider({ children }) {
       localStorage.removeItem("vortex_current_session_id");
       localStorage.removeItem("vortex_current_session");
     }
-  };
+  }, [loadSession]);
+
+  // Load sessions and current session from localStorage on mount
+  useEffect(() => {
+    loadSessions();
+    loadCurrentSessionFromStorage();
+  }, [loadSessions, loadCurrentSessionFromStorage]);
+
+  // Save current session to localStorage whenever it changes
+  useEffect(() => {
+    if (state.currentSession) {
+      localStorage.setItem("vortex_current_session_id", state.currentSession.id);
+      localStorage.setItem("vortex_current_session", JSON.stringify(state.currentSession));
+    }
+  }, [state.currentSession]);
 
   // Actions
-  const setLoading = (loading) => {
-    dispatch({ type: SESSION_ACTIONS.SET_LOADING, payload: loading });
-  };
 
-  const setError = (error) => {
-    dispatch({ type: SESSION_ACTIONS.SET_ERROR, payload: error });
-  };
+  const createSession = useCallback(
+    async (clientAdvisorId = "demo_advisor", clientId = "demo_client") => {
+      try {
+        setLoading(true);
+        const session = await apiService.createSession(clientAdvisorId, clientId);
+        dispatch({ type: SESSION_ACTIONS.SET_CURRENT_SESSION, payload: session });
 
-  const createSession = async (clientAdvisorId = "demo_advisor", clientId = "demo_client") => {
-    try {
-      setLoading(true);
-      const session = await apiService.createSession(clientAdvisorId, clientId);
-      dispatch({ type: SESSION_ACTIONS.SET_CURRENT_SESSION, payload: session });
+        // Add to sessions list
+        dispatch({
+          type: SESSION_ACTIONS.SET_SESSIONS_LIST,
+          payload: [...state.sessions, session],
+        });
 
-      // Add to sessions list
-      const updatedSessions = [...state.sessions, session];
-      dispatch({ type: SESSION_ACTIONS.SET_SESSIONS_LIST, payload: updatedSessions });
+        return session;
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [state.sessions, setLoading, setError]
+  );
 
-      return session;
-    } catch (error) {
-      setError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const uploadDocument = useCallback(
+    async (file, onProgress, sessionId) => {
+      const targetSessionId = sessionId || state.currentSession?.id;
+      if (!targetSessionId) {
+        throw new Error("No active session");
+      }
 
-  const loadSession = async (sessionId) => {
-    try {
-      setLoading(true);
-      const session = await apiService.getSession(sessionId);
-      dispatch({ type: SESSION_ACTIONS.SET_CURRENT_SESSION, payload: session });
-      return session;
-    } catch (error) {
-      setError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        setLoading(true);
 
-  const loadSessions = async () => {
-    try {
-      const sessions = await apiService.getAllSessions();
-      dispatch({ type: SESSION_ACTIONS.SET_SESSIONS_LIST, payload: sessions });
-    } catch (error) {
-      console.error("Failed to load sessions:", error);
-      // Don't set error for this as it's background loading
-    }
-  };
+        const result = await apiService.uploadDocument(targetSessionId, file, onProgress);
 
-  const uploadDocument = async (file, onProgress) => {
-    if (!state.currentSession) {
-      throw new Error("No active session");
-    }
+        // After upload, reload the session to get the updated data with the new document
+        await loadSession(targetSessionId);
 
-    try {
-      setLoading(true);
+        return result;
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [state.currentSession, loadSession, setLoading, setError]
+  );
 
-      const result = await apiService.uploadDocument(state.currentSession.id, file, onProgress);
+  const processImageCapture = useCallback(
+    async (imageData) => {
+      if (!state.currentSession) {
+        throw new Error("No active session");
+      }
 
-      // After upload, reload the session to get the updated data with the new document
-      await loadSession(state.currentSession.id);
+      try {
+        setLoading(true);
 
-      return result;
-    } catch (error) {
-      setError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+        const result = await apiService.processImageCapture(state.currentSession.id, imageData);
 
-  const processImageCapture = async (imageData) => {
-    if (!state.currentSession) {
-      throw new Error("No active session");
-    }
+        // After capture processing, reload the session to get the updated data
+        await loadSession(state.currentSession.id);
 
-    try {
-      setLoading(true);
+        return result;
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [state.currentSession, loadSession, setLoading, setError]
+  );
 
-      const result = await apiService.processImageCapture(state.currentSession.id, imageData);
+  const executeAction = useCallback(
+    async (actionId, actionData) => {
+      if (!state.currentSession) {
+        throw new Error("No active session");
+      }
 
-      // After capture processing, reload the session to get the updated data
-      await loadSession(state.currentSession.id);
+      try {
+        setLoading(true);
 
-      return result;
-    } catch (error) {
-      setError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
+        const result = await apiService.executeAction(state.currentSession.id, actionId, actionData);
 
-  const executeAction = async (actionId, actionData) => {
-    if (!state.currentSession) {
-      throw new Error("No active session");
-    }
+        // Update action status
+        dispatch({
+          type: SESSION_ACTIONS.UPDATE_ACTION_STATUS,
+          payload: {
+            actionId,
+            result,
+          },
+        });
 
-    try {
-      setLoading(true);
+        return result;
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [state.currentSession, setLoading, setError]
+  );
 
-      const result = await apiService.executeAction(state.currentSession.id, actionId, actionData);
-
-      // Update action status
-      dispatch({
-        type: SESSION_ACTIONS.UPDATE_ACTION_STATUS,
-        payload: {
-          actionId,
-          result,
-        },
-      });
-
-      return result;
-    } catch (error) {
-      setError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearSession = () => {
+  const clearSession = useCallback(() => {
     dispatch({ type: SESSION_ACTIONS.CLEAR_SESSION });
     // Clear from localStorage
     localStorage.removeItem("vortex_current_session_id");
     localStorage.removeItem("vortex_current_session");
-  };
+  }, []);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: SESSION_ACTIONS.SET_ERROR, payload: null });
-  };
+  }, []);
 
-  const value = {
-    ...state,
-    // Actions
-    createSession,
-    loadSession,
-    loadSessions,
-    uploadDocument,
-    processImageCapture,
-    executeAction,
-    clearSession,
-    clearError,
-    setError,
-  };
+  const value = React.useMemo(
+    () => ({
+      ...state,
+      // Actions
+      createSession,
+      loadSession,
+      loadSessions,
+      uploadDocument,
+      processImageCapture,
+      executeAction,
+      clearSession,
+      clearError,
+      setError,
+    }),
+    [state, createSession, loadSession, loadSessions, uploadDocument, processImageCapture, executeAction, clearSession, clearError, setError]
+  );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

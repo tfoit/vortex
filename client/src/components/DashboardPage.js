@@ -1,105 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Users, FileText, CheckCircle, Clock, TrendingUp, AlertTriangle, Calendar } from "lucide-react";
+import { Users, FileText, CheckCircle, Clock, TrendingUp, AlertTriangle } from "lucide-react";
 
 import { useSession } from "../context/SessionContext";
 import VortexAnimation from "./VortexAnimation";
 
 const DashboardPage = () => {
-  const navigate = useNavigate();
-  const { sessions, loadSessions, loading, currentSession: activeSession, createSession, uploadDocument } = useSession();
-
-  const [isDragging, setIsDragging] = useState(false);
-  const [shouldNavigate, setShouldNavigate] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [processingStage, setProcessingStage] = useState("");
+  const { sessions, loadSessions, loading } = useSession();
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
-
-  useEffect(() => {
-    if (shouldNavigate && activeSession?.id && activeSession.documents?.length > 0) {
-      const timer = setTimeout(() => {
-        navigate(`/session/${activeSession.id}`);
-        setShouldNavigate(false);
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [shouldNavigate, activeSession, navigate]);
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      await handleDocumentUpload(files[0]);
-    }
-  };
-
-  const handleFileSelect = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      await handleDocumentUpload(files[0]);
-    }
-  };
-
-  const handleDocumentUpload = async (file) => {
-    try {
-      console.log("🚀 Starting upload process for file:", file.name, file.size, file.type);
-      setUploadProgress(0);
-      setProcessingStage("Initializing...");
-
-      // Always create a new session for each upload.
-      console.log("📝 Creating new session for new upload...");
-      setProcessingStage("Creating session...");
-      const newSession = await createSession();
-      console.log("✅ Session created:", newSession?.id);
-      const sessionIdToUpload = newSession.id;
-      setUploadProgress(20);
-
-      // Upload the document with progress tracking
-      console.log("📤 Starting document upload...");
-      setProcessingStage("Uploading document...");
-      await uploadDocument(
-        file,
-        (progress) => {
-          console.log("📊 Upload progress:", progress);
-          setUploadProgress(20 + progress * 0.7); // 20-90%
-        },
-        sessionIdToUpload
-      );
-      console.log("✅ Upload completed");
-
-      setUploadProgress(100);
-      setProcessingStage("Analysis complete!");
-      console.log("🎉 Upload process completed successfully");
-
-      // Trigger navigation
-      setShouldNavigate(true);
-    } catch (error) {
-      console.error("❌ Upload failed with error:", error);
-      console.error("Error details:", {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      });
-      setProcessingStage(`Upload failed: ${error.message}`);
-      setUploadProgress(0);
-    }
-  };
 
   const stats = React.useMemo(() => {
     const totalSessions = sessions.length;

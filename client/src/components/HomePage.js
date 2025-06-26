@@ -68,9 +68,13 @@ const HomePage = () => {
 
       // Upload the document with progress tracking
       setProcessingStage("Uploading document...");
-      await uploadDocument(file, (progress) => {
-        setUploadProgress(20 + progress * 0.3); // 20-50%
-      });
+      await uploadDocument(
+        file,
+        (progress) => {
+          setUploadProgress(20 + progress * 0.3); // 20-50%
+        },
+        sessionIdToUpload
+      );
 
       setUploadProgress(50);
       setProcessingStage("Analyzing with Ollama vision...");
