@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations and styles */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .vortex-animation {
+    @apply relative overflow-hidden;
+  }
+  
+  .vortex-particle {
+    position: absolute;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #dc2626, #ef4444);
+    animation: vortex-spin 3s linear infinite;
+  }
+  
+  .vortex-center {
+    @apply absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2;
+    animation: vortex-pulse 2s ease-in-out infinite;
+  }
+  
+  .drop-zone {
+    @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-all duration-300;
+  }
+  
+  .drop-zone.drag-over {
+    @apply border-red-500 bg-red-50;
+  }
+  
+  .action-card {
+    @apply bg-white rounded-lg shadow-md p-6 border-l-4 hover:shadow-lg transition-all duration-300;
+  }
+  
+  .action-card.high-priority {
+    @apply border-red-500;
+  }
+  
+  .action-card.medium-priority {
+    @apply border-yellow-500;
+  }
+  
+  .action-card.low-priority {
+    @apply border-green-500;
+  }
+}
+
+@keyframes vortex-spin {
+  0% {
+    transform: rotate(0deg) translateX(50px) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: rotate(360deg) translateX(50px) rotate(-360deg);
+    opacity: 1;
+  }
+}
+
+@keyframes vortex-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Loading states */
+.processing-overlay {
+  background: rgba(0, 0, 0, 0.8);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.processing-spinner {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top: 3px solid #fff;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+} 

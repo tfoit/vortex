@@ -1,0 +1,434 @@
+import React, { useState, useCallback, useRef } from 'react';
+import { Upload, FileText, AlertTriangle, CheckCircle, Clock, Users, TrendingUp, Shield, Eye, Download, X, Menu } from 'lucide-react';
+
+const VortexApp = () => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [activeSession, setActiveSession] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const fileInputRef = useRef(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Generate UUID v4
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  // Mock UBS Systems Data
+  const mockSystems = {
+    mainframe: {
+      clients: [
+        { id: 'C001', name: 'Hans Mueller', netWorth: 2500000, riskProfile: 'Conservative' },
+        { id: 'C002', name: 'Anna Schmidt', netWorth: 1800000, riskProfile: 'Moderate' },
+        { id: 'C003', name: 'Thomas Weber', netWorth: 4200000, riskProfile: 'Aggressive' }
+      ]
+    },
+    crm: {
+      interactions: []
+    },
+    compliance: {
+      flags: []
+    },
+    trading: {
+      recommendations: []
+    }
+  };
+
+  // Simulate document processing with Ollama vision model
+  const processDocument = async (file) => {
+    setIsProcessing(true);
+    setIsAnimating(true);
+
+    // Simulate processing delay
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    const sessionUUID = generateUUID();
+    const timestamp = new Date().toISOString();
+
+    // Mock AI analysis results
+    const analysisResults = {
+      documentType: file.type.includes('pdf') ? 'PDF Document' : 'Image Document',
+      extractedText: 'Client consultation summary: Discussed portfolio rebalancing strategy. Client expressed interest in ESG investments. Risk tolerance remains moderate. Action items: Review current allocations, prepare ESG fund recommendations.',
+      confidence: 0.94,
+      keyInsights: [
+        'Client interested in ESG investments',
+        'Portfolio rebalancing required',
+        'Risk tolerance: Moderate'
+      ]
+    };
+
+    // Generate AI-driven actions
+    const actions = [
+      {
+        id: `${sessionUUID}/action-1`,
+        type: 'follow-up',
+        priority: 'High',
+        description: 'Prepare ESG fund recommendations for client',
+        system: 'Trading System',
+        status: 'pending'
+      },
+      {
+        id: `${sessionUUID}/action-2`,
+        type: 'analysis',
+        priority: 'Medium',
+        description: 'Review current portfolio allocation',
+        system: 'CRM System',
+        status: 'pending'
+      },
+      {
+        id: `${sessionUUID}/action-3`,
+        type: 'compliance',
+        priority: 'Low',
+        description: 'Update client risk profile documentation',
+        system: 'Compliance System',
+        status: 'pending'
+      }
+    ];
+
+    const newSession = {
+      id: sessionUUID,
+      fileName: file.name,
+      fileSize: file.size,
+      timestamp,
+      analysis: analysisResults,
+      actions,
+      status: 'completed'
+    };
+
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSession(newSession);
+    setIsProcessing(false);
+
+    // Stop animation after completion
+    setTimeout(() => setIsAnimating(false), 1000);
+
+    return newSession;
+  };
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await processDocument(files[0]);
+    }
+  }, []);
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      await processDocument(files[0]);
+    }
+  };
+
+  const executeAction = (actionId) => {
+    setSessions(prev => prev.map(session => ({
+      ...session,
+      actions: session.actions.map(action =>
+        action.id === actionId
+          ? { ...action, status: 'completed', completedAt: new Date().toISOString() }
+          : action
+      )
+    })));
+
+    if (activeSession) {
+      setActiveSession(prev => ({
+        ...prev,
+        actions: prev.actions.map(action => 
+          action.id === actionId 
+            ? { ...action, status: 'completed', completedAt: new Date().toISOString() }
+            : action
+        )
+      }));
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'High': return 'text-red-600 bg-red-100';
+      case 'Medium': return 'text-yellow-600 bg-yellow-100';
+      case 'Low': return 'text-green-600 bg-green-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getSystemIcon = (system) => {
+    switch (system) {
+      case 'Trading System': return <TrendingUp className="w-4 h-4" />;
+      case 'CRM System': return <Users className="w-4 h-4" />;
+      case 'Compliance System': return <Shield className="w-4 h-4" />;
+      default: return <FileText className="w-4 h-4" />;
+    }
+  };
+
+  // Animated Vortex Logo Component
+  const VortexLogo = ({ size = 'w-10 h-10', animate = false }) => (
+    <div className={`relative ${size}`}>
+      <div className={`absolute inset-0 ${animate ? 'animate-spin' : ''}`}>
+        {/* Outer ring with gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-500 to-black rounded-full shadow-lg"></div>
+        {/* Spiral lines */}
+        <div className="absolute inset-1 rounded-full overflow-hidden">
+          <div className="absolute top-0 left-1/2 w-0.5 h-full bg-gradient-to-b from-white to-transparent transform -translate-x-1/2 rotate-12"></div>
+          <div className="absolute top-0 left-1/2 w-0.5 h-full bg-gradient-to-b from-white to-transparent transform -translate-x-1/2 rotate-45"></div>
+          <div className="absolute top-0 left-1/2 w-0.5 h-full bg-gradient-to-b from-white to-transparent transform -translate-x-1/2 rotate-90"></div>
+          <div className="absolute top-0 left-1/2 w-0.5 h-full bg-gradient-to-b from-white to-transparent transform -translate-x-1/2 rotate-135"></div>
+        </div>
+        {/* Inner white ring */}
+        <div className="absolute inset-2 bg-white rounded-full shadow-inner">
+          {/* Center vortex */}
+          <div className="absolute inset-1 bg-gradient-to-br from-red-500 to-black rounded-full flex items-center justify-center">
+            <div className="w-2 h-2 bg-white rounded-full opacity-90 shadow-sm"></div>
+          </div>
+        </div>
+      </div>
+      {/* Glow effect when animating */}
+      {animate && (
+        <div className="absolute -inset-2 bg-red-500 rounded-full opacity-30 blur-md animate-pulse"></div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-800">
+      {/* Header */}
+      <header className="bg-white shadow-sm sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-3">
+              <VortexLogo animate={isProcessing} />
+              <h1 className="text-xl font-bold text-red-600 tracking-wider">VORTEX</h1>
+            </div>
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Side Menu */}
+      <div
+        className={`fixed top-0 right-0 h-full bg-white shadow-lg z-30 transform transition-transform duration-300 ease-in-out ${
+          isMenuOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ width: '320px' }}
+      >
+        <div className="flex justify-between items-center p-4 border-b">
+          <h3 className="text-lg font-medium text-gray-900">History & Status</h3>
+          <button
+            onClick={() => setIsMenuOpen(false)}
+            className="p-2 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+        <div className="p-4 overflow-y-auto h-[calc(100vh-65px)]">
+          {/* Session History Sidebar */}
+          <div className="bg-white rounded-lg">
+            <h3 className="text-md font-semibold text-gray-800 mb-2">Session History</h3>
+            <div>
+              {sessions.length === 0 ? (
+                <div className="text-center py-8">
+                  <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">No sessions yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        activeSession?.id === session.id
+                          ? 'border-red-500 bg-red-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => {
+                        setActiveSession(session);
+                        setIsMenuOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm text-gray-900 truncate">{session.fileName}</h4>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(session.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          {session.actions.filter(a => a.status === 'completed').length > 0 && (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          )}
+                          {session.actions.some(a => a.priority === 'High') && (
+                            <AlertTriangle className="w-4 h-4 text-red-500" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* System Status */}
+          <div className="mt-6 bg-white rounded-lg">
+             <h3 className="text-md font-semibold text-gray-800 mb-2">System Status</h3>
+            <div className="p-4 border rounded-lg space-y-3 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Ollama Vision Model</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-sm text-green-600">Active</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Mainframe Connection</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm text-blue-600">Mock</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">CRM System</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm text-blue-600">Mock</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Compliance System</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm text-blue-600">Mock</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      { isMenuOpen && <div onClick={() => setIsMenuOpen(false)} className="fixed inset-0 bg-black bg-opacity-30 z-20"></div> }
+
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {isProcessing ? (
+          <div className="text-center py-20">
+            <div className="flex justify-center">
+              <VortexLogo size="w-24 h-24" animate={true} />
+            </div>
+            <h3 className="mt-6 text-xl font-semibold text-gray-900">Processing Document</h3>
+            <p className="mt-2 text-md text-gray-600">The vortex is ingesting your document...</p>
+          </div>
+        ) : !activeSession ? (
+          <div
+            className={`mt-10 border-2 border-dashed rounded-xl p-16 text-center transition-all duration-300 ${
+              isDragging ? 'border-red-500 bg-red-50 scale-105' : 'border-gray-300'
+            } hover:border-red-400 hover:bg-red-50 cursor-pointer`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <div className="flex justify-center">
+              <VortexLogo size="w-20 h-20" />
+            </div>
+            <h3 className="mt-4 text-xl font-semibold text-gray-800">
+              Please drag and drop a document
+            </h3>
+            <p className="mt-2 text-md text-gray-500">
+              or click to select a file
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleFileSelect}
+            />
+          </div>
+        ) : (
+          <div className="mt-8">
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-bold text-xl text-gray-900">{activeSession.fileName}</h4>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {formatFileSize(activeSession.fileSize)} • {activeSession.analysis.documentType} • {new Date(activeSession.timestamp).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2 p-1 rounded-full bg-green-100">
+                  <Eye className="w-4 h-4 text-green-600" />
+                  <span className="text-sm text-green-700 font-medium">
+                    {Math.round(activeSession.analysis.confidence * 100)}% confidence
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-8">
+              <h5 className="font-bold text-xl text-gray-900 mb-4">Suggested Actions</h5>
+              <div className="space-y-4">
+                {activeSession.actions.map((action, index) => (
+                  <div key={action.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-lg">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h6 className="font-semibold text-md text-gray-900">{action.description}</h6>
+                        <div className="flex items-center space-x-2 mt-1">
+                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(action.priority)}`}>
+                            {action.priority}
+                          </span>
+                          <span className="text-xs text-gray-500 flex items-center">{getSystemIcon(action.system)}<span className="ml-1">{action.system}</span></span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => executeAction(action.id)}
+                      disabled={action.status === 'completed'}
+                      className={`px-4 py-2 text-sm font-semibold rounded-md transition-all duration-200 ease-in-out transform hover:scale-105 ${
+                        action.status === 'completed'
+                          ? 'bg-green-100 text-green-800 cursor-not-allowed'
+                          : 'bg-red-600 text-white hover:bg-red-700'
+                      }`}
+                    >
+                      {action.status === 'completed' ? 'Done' : 'Execute'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default VortexApp;
