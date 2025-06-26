@@ -6,7 +6,7 @@ import CameraCapture from "./CameraCapture";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, executeAction, createSession, clearSession } = useSession();
+  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, executeAction, createSession, clearSession, loadSessions } = useSession();
 
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -25,6 +25,10 @@ const HomePage = () => {
       return () => clearTimeout(timer);
     }
   }, [shouldNavigate, activeSession, navigate]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
