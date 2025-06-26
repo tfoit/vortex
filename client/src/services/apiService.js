@@ -6,7 +6,7 @@ class ApiService {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000, // 30 seconds for file uploads
+      timeout: 120000, // 2 minutes for file uploads
       headers: {
         "Content-Type": "application/json",
       },
