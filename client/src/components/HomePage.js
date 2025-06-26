@@ -58,12 +58,13 @@ const HomePage = () => {
       setUploadProgress(0);
       setProcessingStage("Initializing...");
 
-      // Create session if none exists
-      if (!activeSession) {
-        setProcessingStage("Creating session...");
-        await createSession();
-        setUploadProgress(20);
-      }
+      // Always create a new session for each upload, as requested.
+      console.log("📝 Creating new session for new upload...");
+      setProcessingStage("Creating session...");
+      const newSession = await createSession();
+      console.log("✅ Session created:", newSession?.id);
+      const sessionIdToUpload = newSession.id;
+      setUploadProgress(20);
 
       // Upload the document with progress tracking
       setProcessingStage("Uploading document...");
