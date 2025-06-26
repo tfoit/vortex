@@ -73,6 +73,17 @@ const upload = multer({
   },
 });
 
+// Middleware to log all requests
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`🌐 ${timestamp} - ${req.method} ${req.url}`);
+  if (req.method === "POST" && req.url.includes("/upload")) {
+    console.log("📋 Upload request headers:", req.headers);
+    console.log("📋 Content-Type:", req.get("Content-Type"));
+  }
+  next();
+});
+
 // Routes
 
 // Health check
@@ -111,65 +122,107 @@ app.get("/api/sessions/:sessionId", async (req, res) => {
 
 // Upload and process document
 app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (req, res) => {
+  console.log("📤 Server: Upload endpoint called");
+  console.log("📊 Request details:", {
+    sessionId: req.params.sessionId,
+    hasFile: !!req.file,
+    fileName: req.file?.originalname,
+    fileSize: req.file?.size,
+    fileType: req.file?.mimetype,
+    filePath: req.file?.path,
+  });
+
   try {
-    console.log("📤 Server: Document upload started");
     const { sessionId } = req.params;
     const file = req.file;
 
-    console.log(`📁 Session ID: ${sessionId}`);
-    console.log(`📄 File: ${file?.originalname} (${file?.size} bytes, ${file?.mimetype})`);
-
     if (!file) {
-      console.log("❌ Server: No file uploaded");
-      return res.status(400).json({ error: "No file uploaded" });
+      console.error("❌ No file provided in upload request");
+      return res.status(400).json({ error: "No file provided" });
     }
 
+    console.log("🔍 Server: Looking for session:", sessionId);
     const session = sessionManager.getSession(sessionId);
     if (!session) {
-      console.log(`❌ Server: Session ${sessionId} not found`);
+      console.error("❌ Session not found:", sessionId);
       return res.status(404).json({ error: "Session not found" });
     }
+    console.log("✅ Session found:", session.id);
 
-    console.log("✅ Server: Session found, processing document...");
+    console.log("📄 Server: Processing document...");
+    const documentId = `document-${Date.now()}-${Math.floor(Math.random() * 1000000000)}${path.extname(file.originalname)}`;
 
-    // Process the document
-    console.log("🔄 Server: Extracting text from document...");
-    const documentText = await documentProcessor.processDocument(file.path, file.mimetype);
-    console.log(`📝 Server: Extracted ${documentText.length} characters of text`);
-    console.log(`📝 Server: Text preview: ${documentText.substring(0, 200)}...`);
-
-    // Analyze with AI
     console.log("🤖 Server: Starting AI analysis...");
-    const analysis = await aiService.analyzeAdvisoryMinutes(documentText);
-    console.log("✅ Server: AI analysis completed");
-    console.log(`📊 Server: Analysis result:`, JSON.stringify(analysis, null, 2));
+    let analysis;
+    try {
+      analysis = await aiService.analyzeAdvisoryMinutes(file.path, file.mimetype);
+      console.log("✅ Server: AI analysis completed");
+      console.log("📊 Server: Analysis result:", analysis);
+    } catch (aiError) {
+      console.error("❌ AI analysis failed:", aiError);
+      console.error("🔍 AI Error details:", {
+        message: aiError.message,
+        stack: aiError.stack,
+        filePath: file.path,
+        fileType: file.mimetype,
+      });
+      throw aiError;
+    }
 
-    // Update session with document and analysis
     console.log("💾 Server: Saving document and analysis to session...");
-    sessionManager.addDocument(sessionId, {
+    const document = {
+      id: documentId,
       filename: file.originalname,
+      size: file.size,
+      type: file.mimetype,
       path: file.path,
-      mimetype: file.mimetype,
-      text: documentText,
-      analysis: analysis,
-    });
+      uploadedAt: new Date().toISOString(),
+    };
 
+    // Add document to session
+    session.documents.push(document);
+    session.analysis = analysis;
+    session.suggestedActions = analysis.suggestedActions || [];
+    session.metadata.totalDocuments = session.documents.length;
+    session.metadata.lastAnalyzed = new Date().toISOString();
+
+    console.log("📊 Added analysis with", analysis.suggestedActions?.length || 0, "suggested actions to session");
+    console.log("📄 Added document to session", sessionId + ":", file.originalname);
+
+    // Save session
+    try {
+      sessionManager.updateSession(sessionId, session);
+      console.log("✅ Session saved successfully");
+    } catch (saveError) {
+      console.error("❌ Failed to save session:", saveError);
+      throw saveError;
+    }
+
+    console.log("📤 Server: Sending response to client");
     const response = {
       sessionId,
-      documentId: file.filename,
+      documentId,
       analysis,
       suggestedActions: analysis.suggestedActions || [],
     };
-
-    console.log("📤 Server: Sending response to client");
-    console.log(`📊 Server: Response:`, JSON.stringify(response, null, 2));
+    console.log("📊 Server: Response:", response);
 
     res.json(response);
   } catch (error) {
-    console.error("❌ Server: Error processing document:");
-    console.error("Error message:", error.message);
-    console.error("Error stack:", error.stack);
-    res.status(500).json({ error: "Failed to process document" });
+    console.error("❌ Server: Upload endpoint error:", error);
+    console.error("🔍 Error details:", {
+      message: error.message,
+      stack: error.stack,
+      sessionId: req.params.sessionId,
+      fileName: req.file?.originalname,
+      fileSize: req.file?.size,
+    });
+    res.status(500).json({
+      error: "Failed to process document",
+      details: error.message,
+      sessionId: req.params.sessionId,
+      fileName: req.file?.originalname,
+    });
   }
 });
 
@@ -272,7 +325,7 @@ app.post("/api/sessions/:sessionId/actions/:actionId", async (req, res) => {
   }
 });
 
-// Get all sessions (for dashboard)
+// Get all sessions
 app.get("/api/sessions", async (req, res) => {
   try {
     const sessions = sessionManager.getAllSessions();

@@ -1,17 +1,113 @@
-import React, { useEffect } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Users, FileText, CheckCircle, Clock, TrendingUp, AlertTriangle, Calendar } from "lucide-react";
+import { Users, FileText, CheckCircle, Clock, TrendingUp, AlertTriangle, Upload, Camera } from "lucide-react";
 
 import { useSession } from "../context/SessionContext";
 import VortexAnimation from "./VortexAnimation";
+import CameraCapture from "./CameraCapture";
 
 const DashboardPage = () => {
-  const { sessions, loadSessions, loading } = useSession();
+  const { sessions, currentSession: activeSession, uploadDocument, processingDocument, createSession, loadSessions, loading } = useSession();
+  const navigate = useNavigate();
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState("");
+  const [shouldNavigate, setShouldNavigate] = useState(false);
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    if (shouldNavigate && activeSession?.id && activeSession.documents?.length > 0) {
+      const timer = setTimeout(() => {
+        navigate(`/session/${activeSession.id}`);
+        setShouldNavigate(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldNavigate, activeSession, navigate]);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await handleDocumentUpload(files[0]);
+    }
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      await handleDocumentUpload(files[0]);
+    }
+  };
+
+  const handleDocumentUpload = async (file) => {
+    try {
+      console.log("🚀 Starting upload process for file:", file.name, file.size, file.type);
+      setUploadProgress(0);
+      setProcessingStage("Initializing...");
+
+      let sessionIdToUpload;
+      // Create session if none exists
+      if (!activeSession) {
+        console.log("📝 Creating new session...");
+        setProcessingStage("Creating session...");
+        const newSession = await createSession();
+        console.log("✅ Session created:", newSession?.id);
+        sessionIdToUpload = newSession.id;
+        setUploadProgress(20);
+      } else {
+        console.log("📝 Using existing session:", activeSession.id);
+        sessionIdToUpload = activeSession.id;
+      }
+
+      // Upload the document with progress tracking
+      console.log("📤 Starting document upload...");
+      setProcessingStage("Uploading document...");
+      await uploadDocument(
+        file,
+        (progress) => {
+          console.log("📊 Upload progress:", progress);
+          setUploadProgress(20 + progress * 0.7); // 20-90%
+        },
+        sessionIdToUpload
+      );
+      console.log("✅ Upload completed");
+
+      setUploadProgress(100);
+      setProcessingStage("Analysis complete!");
+      console.log("🎉 Upload process completed successfully");
+
+      // Trigger navigation
+      setShouldNavigate(true);
+    } catch (error) {
+      console.error("❌ Upload failed with error:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      setProcessingStage(`Upload failed: ${error.message}`);
+      setUploadProgress(0);
+    }
+  };
 
   const stats = React.useMemo(() => {
     const totalSessions = sessions.length;
@@ -30,11 +126,72 @@ const DashboardPage = () => {
     };
   }, [sessions]);
 
-  if (loading) {
+  // Vortex Logo Component with Enhanced Animation
+  const VortexLogo = ({ size = "w-24 h-24", animate = false }) => (
+    <div className={`relative ${size}`}>
+      <div className={`${animate ? "animate-spin" : ""} transition-transform duration-300`} style={{ animationDuration: animate ? "2s" : "0s" }}>
+        <img src="/vortex-logo.png" alt="Vortex" className="w-full h-full object-contain" />
+      </div>
+      {animate && (
+        <>
+          <div className="absolute -inset-4 bg-red-600 rounded-full opacity-20 blur-xl animate-pulse"></div>
+          <div className="absolute -inset-2 border-2 border-red-400 rounded-full animate-ping opacity-30"></div>
+          <div className="absolute -inset-6 border border-red-300 rounded-full animate-pulse opacity-20"></div>
+          {/* Whoosh effect */}
+          <div className="absolute -inset-8 border border-red-200 rounded-full animate-ping opacity-10" style={{ animationDelay: "0.5s" }}></div>
+          <div className="absolute -inset-10 border border-red-100 rounded-full animate-ping opacity-5" style={{ animationDelay: "1s" }}></div>
+        </>
+      )}
+    </div>
+  );
+
+  if (loading && !sessions.length) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
         <VortexAnimation size={100} particleCount={8} isActive={true} />
         <p className="mt-4 text-on-surface-secondary">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (showCamera) {
+    return <CameraCapture onBack={() => setShowCamera(false)} />;
+  }
+
+  if (processingDocument) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh]">
+        <VortexLogo size="w-32 h-32" animate={true} />
+        <div className="mt-8 text-center max-w-md">
+          <h2 className="text-2xl font-light text-gray-900 mb-4">Processing Document</h2>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+            <div className="bg-red-600 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }}></div>
+          </div>
+
+          {/* Progress Percentage */}
+          <div className="text-sm text-gray-500 mb-2">{Math.round(uploadProgress)}% Complete</div>
+
+          {/* Current Stage */}
+          <p className="text-gray-600 font-medium">{processingStage}</p>
+
+          {/* Processing Steps */}
+          <div className="mt-6 space-y-2 text-sm text-gray-500">
+            <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 20 ? "text-green-600" : ""}`}>
+              <div className={`w-2 h-2 rounded-full ${uploadProgress >= 20 ? "bg-green-500" : "bg-gray-300"}`}></div>
+              <span>Session Created</span>
+            </div>
+            <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 90 ? "text-green-600" : ""}`}>
+              <div className={`w-2 h-2 rounded-full ${uploadProgress >= 90 ? "bg-green-500" : "bg-gray-300"}`}></div>
+              <span>Document Uploaded</span>
+            </div>
+            <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 100 ? "text-green-600" : ""}`}>
+              <div className={`w-2 h-2 rounded-full ${uploadProgress >= 100 ? "bg-green-500" : "bg-gray-300"}`}></div>
+              <span>Ready for Review</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -118,6 +275,47 @@ const DashboardPage = () => {
             </Link>
           </div>
         )}
+      </motion.div>
+
+      {/* Upload Area */}
+      <motion.div
+        className={`w-full max-w-2xl mx-auto my-8 border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${isDragging ? "border-red-400 bg-red-50 scale-[1.02]" : "border-gray-200 hover:border-red-300 hover:bg-gray-50"} cursor-pointer`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => document.getElementById("file-upload").click()}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <div className="mb-6">
+          <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+        </div>
+        <h3 className="text-xl font-light text-gray-900 mb-2">Upload Advisory Documents</h3>
+        <p className="text-gray-600 mb-6">Drag and drop files here, or click to browse</p>
+        <div className="flex justify-center space-x-4">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              document.getElementById("file-upload").click();
+            }}
+            className="inline-flex items-center px-6 py-3 border border-red-600 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-all duration-200"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Choose Files
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowCamera(true);
+            }}
+            className="inline-flex items-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all duration-200"
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            Use Camera
+          </button>
+        </div>
+        <input id="file-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.txt" onChange={handleFileSelect} />
       </motion.div>
     </main>
   );
