@@ -6,7 +6,23 @@ import CameraCapture from "./CameraCapture";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, executeAction, createSession, clearSession } = useSession();
+  const { sessions, currentSession: activeSession, uploadDocument, processingDocument, executeAction, createSession, clearSession, clearError } = useSession();
+
+  // TEMPORARY FIX: Clear empty sessions on mount
+  useEffect(() => {
+    const sessionId = localStorage.getItem("vortex_current_session_id");
+    if (sessionId && !activeSession) {
+      // If there's a session ID in storage but no active session in context yet,
+      // it might be loading. We'll wait for the activeSession to be populated.
+      return;
+    }
+
+    if (sessionId && activeSession && (!activeSession.documents || activeSession.documents.length === 0)) {
+      console.log("🧹 Clearing invalid session from previous attempt:", sessionId);
+      clearSession();
+      navigate("/"); // Navigate to home to ensure a clean state
+    }
+  }, [activeSession, clearSession, navigate]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -55,49 +71,56 @@ const HomePage = () => {
 
   const handleDocumentUpload = async (file) => {
     try {
+      console.log("🚀 Starting upload process for file:", file.name, file.size, file.type);
       setUploadProgress(0);
       setProcessingStage("Initializing...");
 
+      let sessionIdToUpload;
       // Create session if none exists
       if (!activeSession) {
+        console.log("📝 Creating new session...");
         setProcessingStage("Creating session...");
-        await createSession();
+        const newSession = await createSession();
+        console.log("✅ Session created:", newSession?.id);
+        sessionIdToUpload = newSession.id;
         setUploadProgress(20);
+      } else {
+        console.log("📝 Using existing session:", activeSession.id);
+        sessionIdToUpload = activeSession.id;
       }
 
       // Upload the document with progress tracking
+      console.log("📤 Starting document upload...");
       setProcessingStage("Uploading document...");
-      await uploadDocument(file, (progress) => {
-        setUploadProgress(20 + progress * 0.3); // 20-50%
-      });
+      await uploadDocument(
+        file,
+        (progress) => {
+          console.log("📊 Upload progress:", progress);
+          setUploadProgress(20 + progress * 0.7); // 20-90%
+        },
+        sessionIdToUpload
+      );
+      console.log("✅ Upload completed");
 
-      setUploadProgress(50);
-      setProcessingStage("Analyzing with Ollama vision...");
+      setUploadProgress(100);
+      setProcessingStage("Analysis complete!");
+      console.log("🎉 Upload process completed successfully");
 
-      // Simulate analysis progress
-      const analysisInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(analysisInterval);
-            return 90;
-          }
-          return prev + 5;
-        });
-      }, 200);
-
-      // Wait a moment for the session to be fully updated
-      setTimeout(() => {
-        clearInterval(analysisInterval);
-        setUploadProgress(100);
-        setProcessingStage("Analysis complete!");
-
-        // Trigger navigation
-        setShouldNavigate(true);
-      }, 2000);
+      // Trigger navigation
+      setShouldNavigate(true);
     } catch (error) {
-      console.error("Failed to upload document:", error);
-      setProcessingStage("Upload failed");
+      console.error("❌ Upload failed with error:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      setProcessingStage(`Upload failed: ${error.message}`);
       setUploadProgress(0);
+      // Clear the error after a few seconds
+      setTimeout(() => {
+        clearError();
+      }, 5000);
     }
   };
 
@@ -154,6 +177,21 @@ const HomePage = () => {
     </div>
   );
 
+  // Debug logging
+  console.log("🔍 Debug Info:", {
+    activeSession: !!activeSession,
+    hasDocuments: activeSession?.documents,
+    documentsLength: activeSession?.documents?.length,
+    shouldShowUpload: !activeSession || !activeSession.documents || activeSession.documents.length === 0,
+  });
+
+  // Temporary debug function to clear localStorage
+  const clearStorageAndReset = () => {
+    localStorage.clear();
+    clearSession();
+    window.location.reload();
+  };
+
   if (showCamera) {
     return <CameraCapture onBack={() => setShowCamera(false)} />;
   }
@@ -178,9 +216,14 @@ const HomePage = () => {
               </div>
               <div className="text-lg font-light text-gray-900 tracking-wide">Vortex</div>
             </div>
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
-              <Menu className="h-5 w-5" />
-            </button>
+            <div className="flex items-center space-x-4">
+              <button onClick={clearStorageAndReset} className="px-3 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200">
+                Clear Session
+              </button>
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -218,27 +261,31 @@ const HomePage = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {sessions.slice(0, 5).map((session) => (
-                  <div
-                    key={session.id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${activeSession?.id === session.id ? "border-red-200 bg-red-50" : "border-gray-100 hover:border-gray-200"}`}
-                    onClick={() => {
-                      loadSession(session.id);
-                      setIsMenuOpen(false);
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h5 className="font-medium text-sm text-gray-900 truncate">{session.fileName || "Document Session"}</h5>
-                        <p className="text-xs text-gray-500 mt-1">{new Date(session.timestamp || session.createdAt).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        {session.suggestedActions && session.suggestedActions.filter((a) => a.status === "completed").length > 0 && <CheckCircle className="w-4 h-4 text-green-500" />}
-                        {session.suggestedActions && session.suggestedActions.some((a) => a.priority === "High") && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                {sessions
+                  .filter((session) => session.documents && session.documents.length > 0) // Only show sessions with documents
+                  .slice(0, 5)
+                  .map((session) => (
+                    <div
+                      key={session.id}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${activeSession?.id === session.id ? "border-red-200 bg-red-50" : "border-gray-100 hover:border-gray-200"}`}
+                      onClick={() => {
+                        navigate(`/session/${session.id}`);
+                        setIsMenuOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-medium text-sm text-gray-900 truncate">{session.documents?.[0]?.filename || session.fileName || "Document Session"}</h5>
+                          <p className="text-xs text-gray-500 mt-1">{new Date(session.timestamp || session.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          {session.analysis && <Eye className="w-4 h-4 text-green-500" />}
+                          {session.suggestedActions && session.suggestedActions.filter((a) => a.status === "completed").length > 0 && <CheckCircle className="w-4 h-4 text-green-500" />}
+                          {session.suggestedActions && session.suggestedActions.some((a) => a.priority === "High") && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>
@@ -289,7 +336,7 @@ const HomePage = () => {
       {isMenuOpen && <div onClick={() => setIsMenuOpen(false)} className="fixed inset-0 bg-black bg-opacity-20 z-20"></div>}
 
       <main className="max-w-4xl mx-auto px-6 lg:px-8">
-        {isProcessing ? (
+        {processingDocument ? (
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             <VortexLogo size="w-32 h-32" animate={true} />
             <div className="mt-8 text-center max-w-md">
@@ -327,7 +374,7 @@ const HomePage = () => {
               </div>
             </div>
           </div>
-        ) : !activeSession ? (
+        ) : !activeSession || !activeSession.documents || activeSession.documents.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             {/* Main Logo and CTA */}
             <div className="text-center mb-12">

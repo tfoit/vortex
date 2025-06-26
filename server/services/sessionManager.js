@@ -120,10 +120,12 @@ class SessionManager {
   }
 
   getAllSessions() {
-    return Array.from(this.sessions.values()).map((session) => ({
-      ...session,
-      subSessions: Array.from(session.subSessions.values()),
-    }));
+    return Array.from(this.sessions.values())
+      .map((session) => ({
+        ...session,
+        subSessions: Array.from(session.subSessions.values()),
+      }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   addDocument(sessionId, documentData) {
