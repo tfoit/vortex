@@ -1,8 +1,12 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Camera, X, RotateCcw, Check } from "lucide-react";
+import { useSession } from "../context/SessionContext";
 
-const CameraCapture = ({ onCapture, onCancel }) => {
+const CameraCapture = ({ onBack }) => {
+  const navigate = useNavigate();
+  const { currentSession: activeSession, processImageCapture, createSession } = useSession();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -66,11 +70,28 @@ const CameraCapture = ({ onCapture, onCancel }) => {
     startCamera();
   }, [startCamera]);
 
-  const confirmCapture = useCallback(() => {
+  const confirmCapture = useCallback(async () => {
     if (capturedImage) {
-      onCapture(capturedImage);
+      try {
+        // Create session if none exists
+        if (!activeSession) {
+          await createSession();
+        }
+
+        // Process the captured image
+        await processImageCapture(capturedImage);
+
+        // Navigate to session view
+        setTimeout(() => {
+          if (activeSession?.id) {
+            navigate(`/session/${activeSession.id}`);
+          }
+        }, 1000);
+      } catch (error) {
+        console.error("Failed to process captured image:", error);
+      }
     }
-  }, [capturedImage, onCapture]);
+  }, [capturedImage, activeSession, processImageCapture, createSession, navigate]);
 
   // Start camera when component mounts
   React.useEffect(() => {
@@ -84,7 +105,7 @@ const CameraCapture = ({ onCapture, onCancel }) => {
     <div className="text-center">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-bold text-gray-800">Capture Document</h3>
-        <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+        <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <X className="w-5 h-5 text-gray-500" />
         </button>
       </div>
@@ -122,7 +143,7 @@ const CameraCapture = ({ onCapture, onCancel }) => {
       <div className="flex justify-center space-x-4">
         {!capturedImage ? (
           <>
-            <motion.button onClick={onCancel} className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <motion.button onClick={onBack} className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               Cancel
             </motion.button>
 

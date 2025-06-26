@@ -1,14 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSession } from "../context/SessionContext";
 import { Menu, X, Clock, CheckCircle, AlertTriangle, Eye, Users, TrendingUp, Shield, FileText, Upload, Camera } from "lucide-react";
 import CameraCapture from "./CameraCapture";
 
 const HomePage = () => {
+  const navigate = useNavigate();
   const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, executeAction, createSession, clearSession } = useSession();
 
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState("");
+  const [shouldNavigate, setShouldNavigate] = useState(false);
+
+  // Effect to handle navigation after upload completion
+  useEffect(() => {
+    if (shouldNavigate && activeSession?.id && activeSession.documents?.length > 0) {
+      const timer = setTimeout(() => {
+        navigate(`/session/${activeSession.id}`);
+        setShouldNavigate(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldNavigate, activeSession, navigate]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -39,15 +55,49 @@ const HomePage = () => {
 
   const handleDocumentUpload = async (file) => {
     try {
+      setUploadProgress(0);
+      setProcessingStage("Initializing...");
+
       // Create session if none exists
       if (!activeSession) {
+        setProcessingStage("Creating session...");
         await createSession();
+        setUploadProgress(20);
       }
 
-      // Upload the document
-      await uploadDocument(file);
+      // Upload the document with progress tracking
+      setProcessingStage("Uploading document...");
+      await uploadDocument(file, (progress) => {
+        setUploadProgress(20 + progress * 0.3); // 20-50%
+      });
+
+      setUploadProgress(50);
+      setProcessingStage("Analyzing with Ollama vision...");
+
+      // Simulate analysis progress
+      const analysisInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(analysisInterval);
+            return 90;
+          }
+          return prev + 5;
+        });
+      }, 200);
+
+      // Wait a moment for the session to be fully updated
+      setTimeout(() => {
+        clearInterval(analysisInterval);
+        setUploadProgress(100);
+        setProcessingStage("Analysis complete!");
+
+        // Trigger navigation
+        setShouldNavigate(true);
+      }, 2000);
     } catch (error) {
       console.error("Failed to upload document:", error);
+      setProcessingStage("Upload failed");
+      setUploadProgress(0);
     }
   };
 
@@ -88,7 +138,7 @@ const HomePage = () => {
   // Vortex Logo Component with Enhanced Animation
   const VortexLogo = ({ size = "w-24 h-24", animate = false }) => (
     <div className={`relative ${size}`}>
-      <div className={`${animate ? "animate-spin" : ""} transition-transform duration-300`}>
+      <div className={`${animate ? "animate-spin" : ""} transition-transform duration-300`} style={{ animationDuration: animate ? "2s" : "0s" }}>
         <img src="/vortex-logo.png" alt="Vortex" className="w-full h-full object-contain" />
       </div>
       {animate && (
@@ -96,6 +146,9 @@ const HomePage = () => {
           <div className="absolute -inset-4 bg-red-600 rounded-full opacity-20 blur-xl animate-pulse"></div>
           <div className="absolute -inset-2 border-2 border-red-400 rounded-full animate-ping opacity-30"></div>
           <div className="absolute -inset-6 border border-red-300 rounded-full animate-pulse opacity-20"></div>
+          {/* Whoosh effect */}
+          <div className="absolute -inset-8 border border-red-200 rounded-full animate-ping opacity-10" style={{ animationDelay: "0.5s" }}></div>
+          <div className="absolute -inset-10 border border-red-100 rounded-full animate-ping opacity-5" style={{ animationDelay: "1s" }}></div>
         </>
       )}
     </div>
@@ -239,9 +292,39 @@ const HomePage = () => {
         {isProcessing ? (
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             <VortexLogo size="w-32 h-32" animate={true} />
-            <div className="mt-8 text-center">
-              <h2 className="text-2xl font-light text-gray-900 mb-2">Processing Document</h2>
-              <p className="text-gray-600">Vortex is analyzing your document with local Ollama vision...</p>
+            <div className="mt-8 text-center max-w-md">
+              <h2 className="text-2xl font-light text-gray-900 mb-4">Processing Document</h2>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+                <div className="bg-red-600 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }}></div>
+              </div>
+
+              {/* Progress Percentage */}
+              <div className="text-sm text-gray-500 mb-2">{Math.round(uploadProgress)}% Complete</div>
+
+              {/* Current Stage */}
+              <p className="text-gray-600 font-medium">{processingStage}</p>
+
+              {/* Processing Steps */}
+              <div className="mt-6 space-y-2 text-sm text-gray-500">
+                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 20 ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 20 ? "bg-green-500" : "bg-gray-300"}`}></div>
+                  <span>Session Created</span>
+                </div>
+                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 50 ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 50 ? "bg-green-500" : "bg-gray-300"}`}></div>
+                  <span>Document Uploaded</span>
+                </div>
+                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 90 ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 90 ? "bg-green-500" : "bg-gray-300"}`}></div>
+                  <span>AI Analysis</span>
+                </div>
+                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 100 ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 100 ? "bg-green-500" : "bg-gray-300"}`}></div>
+                  <span>Ready for Review</span>
+                </div>
+              </div>
             </div>
           </div>
         ) : !activeSession ? (
