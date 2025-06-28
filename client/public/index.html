@@ -4,16 +4,8 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/vortex-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#dc2626" />
     <meta name="description" content="UBS Vortex - Intelligent document analysis for client advisory services" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/vortex-logo.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-
-    <!-- PWA Meta Tags -->
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Vortex Agent" />
 
     <!-- Preload fonts for better performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -65,21 +57,5 @@
         <div class="loading-spinner"></div>
       </div>
     </div>
-
-    <script>
-      // Register service worker for PWA
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          navigator.serviceWorker
-            .register("%PUBLIC_URL%/sw.js")
-            .then(function (registration) {
-              console.log("SW registered: ", registration);
-            })
-            .catch(function (registrationError) {
-              console.log("SW registration failed: ", registrationError);
-            });
-        });
-      }
-    </script>
   </body>
 </html>

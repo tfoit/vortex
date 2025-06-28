@@ -1,9 +1,27 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:7775/api";
+// Dynamic API URL detection for mobile access
+const getApiBaseUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+
+  // For development, use the current host but with server port
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    return `http://${hostname}:7775/api`;
+  }
+
+  // Fallback for server-side rendering
+  return "http://localhost:7775/api";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class ApiService {
   constructor() {
+    console.log(`🌐 API Service initialized with base URL: ${API_BASE_URL}`);
+
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 120000, // 2 minutes for file uploads
@@ -73,6 +91,10 @@ class ApiService {
 
   // Document processing
   async uploadDocument(sessionId, file, onProgress) {
+    console.log(`📱 Mobile Upload: Starting upload for session ${sessionId}`);
+    console.log(`📄 File details: ${file.name}, size: ${file.size}, type: ${file.type}`);
+    console.log(`🌐 Upload URL: ${API_BASE_URL}/sessions/${sessionId}/upload`);
+
     const formData = new FormData();
     formData.append("document", file);
 
@@ -81,13 +103,36 @@ class ApiService {
         "Content-Type": "multipart/form-data",
       },
       onUploadProgress: (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        console.log(`📊 Upload progress: ${percentCompleted}%`);
         if (onProgress) {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           onProgress(percentCompleted);
         }
       },
     });
+
+    console.log(`✅ Mobile Upload: Upload completed successfully`);
     return response.data;
+  }
+
+  async analyzeDocument(sessionId, documentId) {
+    try {
+      const response = await this.client.post(`/sessions/${sessionId}/documents/${documentId}/analyze`);
+      return response.data;
+    } catch (error) {
+      console.error("Analysis error:", error);
+      throw new Error("Failed to analyze document.");
+    }
+  }
+
+  async analyzeDocumentWithVision(sessionId, documentId) {
+    try {
+      const response = await this.client.post(`/sessions/${sessionId}/documents/${documentId}/analyze-vision`);
+      return response.data;
+    } catch (error) {
+      console.error("Vision analysis error:", error);
+      throw new Error("Failed to analyze document with vision.");
+    }
   }
 
   async processImageCapture(sessionId, imageData) {
@@ -104,16 +149,16 @@ class ApiService {
   }
 
   // Utility methods
-  async retryRequest(requestFn, maxRetries = 3, delay = 1000) {
+  async retryRequest(requestFn, maxRetries = 3, initialDelay = 1000) {
     for (let i = 0; i < maxRetries; i++) {
       try {
         return await requestFn();
       } catch (error) {
         if (i === maxRetries - 1) throw error;
 
-        console.log(`Retry ${i + 1}/${maxRetries} after ${delay}ms`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2; // Exponential backoff
+        const currentDelay = initialDelay * Math.pow(2, i); // Exponential backoff
+        console.log(`Retry ${i + 1}/${maxRetries} after ${currentDelay}ms`);
+        await new Promise((resolve) => setTimeout(resolve, currentDelay));
       }
     }
   }

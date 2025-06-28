@@ -207,12 +207,37 @@ export function SessionProvider({ children }) {
 
       try {
         setLoading(true);
+        console.log("📤 Starting automated document upload and processing...");
 
+        // Upload and get complete analysis in one step
         const result = await apiService.uploadDocument(targetSessionId, file, onProgress);
+        console.log("✅ Document upload completed with analysis:", result);
 
-        // After upload, reload the session to get the updated data with the new document
-        await loadSession(targetSessionId);
+        // Reload session to get the updated data with analysis
+        const updatedSession = await loadSession(targetSessionId);
+        console.log("🔄 Session reloaded after upload");
 
+        return {
+          ...result,
+          session: updatedSession,
+          fullyProcessed: true,
+        };
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [state.currentSession?.id, loadSession, setLoading, setError]
+  );
+
+  const analyzeDocument = useCallback(
+    async (sessionId, documentId) => {
+      try {
+        setLoading(true);
+        const result = await apiService.analyzeDocument(sessionId, documentId);
+        await loadSession(sessionId); // Reload to get the final analysis
         return result;
       } catch (error) {
         setError(error.message);
@@ -221,7 +246,24 @@ export function SessionProvider({ children }) {
         setLoading(false);
       }
     },
-    [state.currentSession, loadSession, setLoading, setError]
+    [loadSession, setLoading, setError]
+  );
+
+  const analyzeDocumentWithVision = useCallback(
+    async (sessionId, documentId) => {
+      try {
+        setLoading(true);
+        const result = await apiService.analyzeDocumentWithVision(sessionId, documentId);
+        await loadSession(sessionId); // Reload to get the final analysis
+        return result;
+      } catch (error) {
+        setError(error.message);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loadSession, setLoading, setError]
   );
 
   const processImageCapture = useCallback(
@@ -250,7 +292,7 @@ export function SessionProvider({ children }) {
   );
 
   const executeAction = useCallback(
-    async (actionId, actionData) => {
+    async (sessionId, actionId) => {
       if (!state.currentSession) {
         throw new Error("No active session");
       }
@@ -258,7 +300,14 @@ export function SessionProvider({ children }) {
       try {
         setLoading(true);
 
-        const result = await apiService.executeAction(state.currentSession.id, actionId, actionData);
+        // Find the action data from the suggested actions
+        const action = state.currentSession.suggestedActions?.find((a) => a.id === actionId);
+        if (!action) {
+          throw new Error(`Action ${actionId} not found`);
+        }
+
+        console.log(`🎯 Executing action: ${action.type} (${actionId})`);
+        const result = await apiService.executeAction(sessionId, actionId, action);
 
         // Update action status
         dispatch({
@@ -269,6 +318,9 @@ export function SessionProvider({ children }) {
           },
         });
 
+        // Reload session to get updated data
+        await loadSession(sessionId);
+
         return result;
       } catch (error) {
         setError(error.message);
@@ -277,7 +329,7 @@ export function SessionProvider({ children }) {
         setLoading(false);
       }
     },
-    [state.currentSession, setLoading, setError]
+    [state.currentSession, loadSession, setLoading, setError]
   );
 
   const clearSession = useCallback(() => {
@@ -299,13 +351,15 @@ export function SessionProvider({ children }) {
       loadSession,
       loadSessions,
       uploadDocument,
+      analyzeDocument,
+      analyzeDocumentWithVision,
       processImageCapture,
       executeAction,
       clearSession,
       clearError,
       setError,
     }),
-    [state, createSession, loadSession, loadSessions, uploadDocument, processImageCapture, executeAction, clearSession, clearError, setError]
+    [state, createSession, loadSession, loadSessions, uploadDocument, analyzeDocument, analyzeDocumentWithVision, processImageCapture, executeAction, clearSession, clearError, setError]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

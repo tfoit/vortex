@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../context/SessionContext";
-import { Menu, X, Clock, CheckCircle, AlertTriangle, Eye, Users, TrendingUp, Shield, FileText, Upload, Camera } from "lucide-react";
+import { Menu, X, Clock, CheckCircle, AlertTriangle, Eye, Upload, Camera, TrendingUp } from "lucide-react";
 import CameraCapture from "./CameraCapture";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, executeAction, createSession, clearSession, loadSessions } = useSession();
+  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, createSession, clearSession, loadSessions } = useSession();
 
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -14,6 +14,29 @@ const HomePage = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState("");
   const [shouldNavigate, setShouldNavigate] = useState(false);
+
+  // Memoize and sort sessions from newest to oldest
+  const sortedSessions = useMemo(() => {
+    return [...sessions].sort((a, b) => {
+      const dateA = new Date(a.timestamp || a.createdAt);
+      const dateB = new Date(b.timestamp || b.createdAt);
+      return dateB - dateA;
+    });
+  }, [sessions]);
+
+  const stageStatus = useMemo(() => {
+    const isInitializing = processingStage === "Initializing...";
+    const isCreatingSession = processingStage === "Creating session...";
+    const isAnalyzing = processingStage === "Analyzing with AI...";
+    const isComplete = processingStage === "Analysis complete!";
+
+    return {
+      sessionCreated: !isInitializing && !isCreatingSession,
+      ocrCompleted: isAnalyzing || isComplete,
+      aiCompleted: isComplete,
+      reviewReady: uploadProgress === 100 && isComplete,
+    };
+  }, [processingStage, uploadProgress]);
 
   // Effect to handle navigation after upload completion
   useEffect(() => {
@@ -66,47 +89,55 @@ const HomePage = () => {
       console.log("📝 Creating new session for new upload...");
       setProcessingStage("Creating session...");
       const newSession = await createSession();
-      console.log("✅ Session created:", newSession?.id);
-      const sessionIdToUpload = newSession.id;
-      setUploadProgress(20);
+      if (!newSession?.id) {
+        throw new Error("Failed to create session.");
+      }
+      console.log("✅ Session created:", newSession.id);
+      setUploadProgress(15);
 
-      // Upload the document with progress tracking
-      setProcessingStage("Uploading document...");
-      await uploadDocument(
+      // Step 2: Intelligent Document Processing (Upload + OCR/Vision + AI Analysis)
+      setProcessingStage("Uploading & Processing with AI...");
+      console.log("🚀 Starting fully automated document processing pipeline...");
+
+      const uploadResult = await uploadDocument(
         file,
         (progress) => {
-          setUploadProgress(20 + progress * 0.3); // 20-50%
+          // Progress from 15% to 95% during the entire automated process
+          setUploadProgress(15 + progress * 0.8);
         },
-        sessionIdToUpload
+        newSession.id
       );
 
-      setUploadProgress(50);
-      setProcessingStage("Analyzing with Ollama vision...");
+      console.log("✅ Automated processing completed:", uploadResult);
 
-      // Simulate analysis progress
-      const analysisInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(analysisInterval);
-            return 90;
-          }
-          return prev + 5;
+      // Check if we got a full analysis
+      if (uploadResult.analysis) {
+        setProcessingStage("Analysis complete - Client identification in progress...");
+        console.log("🔍 Document analysis received, processing method:", uploadResult.processingMethod);
+        console.log("📊 Analysis includes:", {
+          hasText: !!uploadResult.analysis.extractedText,
+          hasActions: uploadResult.analysis.suggestedActions?.length || 0,
+          documentType: uploadResult.analysis.documentType,
         });
-      }, 200);
+      } else {
+        console.warn("⚠️ No analysis received from automated processing");
+        setProcessingStage("Processing completed - Limited analysis available");
+      }
 
-      // Wait a moment for the session to be fully updated
-      setTimeout(() => {
-        clearInterval(analysisInterval);
-        setUploadProgress(100);
-        setProcessingStage("Analysis complete!");
+      setUploadProgress(100);
 
-        // Trigger navigation
-        setShouldNavigate(true);
-      }, 2000);
+      // Trigger navigation after a short delay to show completion
+      setTimeout(() => setShouldNavigate(true), 1000);
     } catch (error) {
-      console.error("Failed to upload document:", error);
-      setProcessingStage("Upload failed");
+      console.error("Failed to process document:", error);
+      setProcessingStage(`Processing failed: ${error.message}`);
       setUploadProgress(0);
+
+      // Show error for a few seconds then reset
+      setTimeout(() => {
+        setProcessingStage("");
+        setUploadProgress(0);
+      }, 3000);
     }
   };
 
@@ -116,32 +147,6 @@ const HomePage = () => {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "High":
-        return "text-red-600 bg-red-50 border-red-200";
-      case "Medium":
-        return "text-amber-600 bg-amber-50 border-amber-200";
-      case "Low":
-        return "text-green-600 bg-green-50 border-green-200";
-      default:
-        return "text-gray-600 bg-gray-50 border-gray-200";
-    }
-  };
-
-  const getSystemIcon = (system) => {
-    switch (system) {
-      case "Trading System":
-        return <TrendingUp className="w-4 h-4" />;
-      case "CRM System":
-        return <Users className="w-4 h-4" />;
-      case "Compliance System":
-        return <Shield className="w-4 h-4" />;
-      default:
-        return <FileText className="w-4 h-4" />;
-    }
   };
 
   // Vortex Logo Component with Enhanced Animation
@@ -182,14 +187,19 @@ const HomePage = () => {
                 }
               }}
             >
-              <div className="w-8 h-8">
-                <img src="/vortex-logo.png" alt="UBS Vortex" className="w-full h-full object-contain" />
-              </div>
-              <div className="text-lg font-light text-gray-900 tracking-wide">Vortex</div>
+              {/* <div className="w-8 h-8">
+                <img src="/vortex-logo.png" alt="Vortex" className="w-full h-full object-contain" />
+              </div> */}
+              <div className="text-lg font-light text-gray-900 tracking-wide">Vortex AI Agent</div>
             </div>
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
-              <Menu className="h-5 w-5" />
-            </button>
+            <div className="flex items-center space-x-4">
+              <button onClick={() => navigate("/dashboard")} className="text-sm font-medium text-gray-600 hover:text-red-600 transition-colors">
+                Dashboard
+              </button>
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -220,34 +230,43 @@ const HomePage = () => {
           {/* Session History */}
           <div className="mb-8">
             <h4 className="text-sm font-medium text-gray-900 mb-4 uppercase tracking-wide">Recent Sessions</h4>
-            {sessions.length === 0 ? (
+            {sortedSessions.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="w-8 h-8 text-gray-300 mx-auto mb-3" />
                 <p className="text-sm text-gray-500">No sessions yet</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {sessions.slice(0, 5).map((session) => (
-                  <div
-                    key={session.id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${activeSession?.id === session.id ? "border-red-200 bg-red-50" : "border-gray-100 hover:border-gray-200"}`}
-                    onClick={() => {
-                      loadSession(session.id);
-                      setIsMenuOpen(false);
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h5 className="font-medium text-sm text-gray-900 truncate">{session.fileName || "Document Session"}</h5>
-                        <p className="text-xs text-gray-500 mt-1">{new Date(session.timestamp || session.createdAt).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        {session.suggestedActions && session.suggestedActions.filter((a) => a.status === "completed").length > 0 && <CheckCircle className="w-4 h-4 text-green-500" />}
-                        {session.suggestedActions && session.suggestedActions.some((a) => a.priority === "High") && <AlertTriangle className="w-4 h-4 text-red-500" />}
+              <div>
+                <div className="space-y-2">
+                  {sortedSessions.slice(0, 5).map((session) => (
+                    <div
+                      key={session.id}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${activeSession?.id === session.id ? "border-red-200 bg-red-50" : "border-gray-100 hover:border-gray-200"}`}
+                      onClick={() => {
+                        loadSession(session.id);
+                        setIsMenuOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-medium text-sm text-gray-900 truncate">{session.fileName || "Document Session"}</h5>
+                          <p className="text-xs text-gray-500 mt-1">{new Date(session.timestamp || session.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          {session.suggestedActions && session.suggestedActions.filter((a) => a.status === "completed").length > 0 && <CheckCircle className="w-4 h-4 text-green-500" />}
+                          {session.suggestedActions && session.suggestedActions.some((a) => a.priority === "High") && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+                {sortedSessions.length > 5 && (
+                  <div className="mt-4 text-center">
+                    <button onClick={() => navigate("/dashboard")} className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
+                      View all {sortedSessions.length} sessions
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -317,20 +336,20 @@ const HomePage = () => {
 
               {/* Processing Steps */}
               <div className="mt-6 space-y-2 text-sm text-gray-500">
-                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 20 ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 20 ? "bg-green-500" : "bg-gray-300"}`}></div>
+                <div className={`flex items-center justify-center space-x-2 ${stageStatus.sessionCreated ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${stageStatus.sessionCreated ? "bg-green-500" : "bg-gray-300"}`}></div>
                   <span>Session Created</span>
                 </div>
-                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 50 ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 50 ? "bg-green-500" : "bg-gray-300"}`}></div>
-                  <span>Document Uploaded</span>
+                <div className={`flex items-center justify-center space-x-2 ${stageStatus.ocrCompleted ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${stageStatus.ocrCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
+                  <span>OCR Complete</span>
                 </div>
-                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 90 ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 90 ? "bg-green-500" : "bg-gray-300"}`}></div>
-                  <span>AI Analysis</span>
+                <div className={`flex items-center justify-center space-x-2 ${stageStatus.aiCompleted ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${stageStatus.aiCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
+                  <span>AI Analysis Complete</span>
                 </div>
-                <div className={`flex items-center justify-center space-x-2 ${uploadProgress >= 100 ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${uploadProgress >= 100 ? "bg-green-500" : "bg-gray-300"}`}></div>
+                <div className={`flex items-center justify-center space-x-2 ${stageStatus.reviewReady ? "text-green-600" : ""}`}>
+                  <div className={`w-2 h-2 rounded-full ${stageStatus.reviewReady ? "bg-green-500" : "bg-gray-300"}`}></div>
                   <span>Ready for Review</span>
                 </div>
               </div>
@@ -340,9 +359,7 @@ const HomePage = () => {
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             {/* Main Logo and CTA */}
             <div className="text-center mb-12">
-              <VortexLogo size="w-40 h-40" />
-              <h1 className="text-4xl font-light text-gray-900 mt-8 mb-4">Vortex</h1>
-              <p className="text-xl text-gray-600 mb-8 max-w-2xl">Intelligent document analysis for UBS client advisors</p>
+              <VortexLogo size="w-120 h-120" />
             </div>
 
             {/* Upload Area */}
@@ -390,60 +407,60 @@ const HomePage = () => {
           </div>
         ) : (
           <div className="py-8">
-            {/* Document Header */}
-            <div className="bg-white border border-gray-100 rounded-xl p-6 mb-8">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-2xl font-light text-gray-900 mb-2">{activeSession.documents?.[0]?.filename || "Document Analysis"}</h2>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
+            <div className="max-w-2xl mx-auto text-center">
+              {/* Processing Complete */}
+              <div className="mb-8">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+                <h2 className="text-2xl font-light text-gray-900 mb-2">Document Processing Complete</h2>
+                <p className="text-gray-600 mb-6">Your document "{activeSession.documents?.[0]?.filename}" has been successfully analyzed with AI insights.</p>
+              </div>
+
+              {/* Quick Summary */}
+              {activeSession.analysis && (
+                <div className="bg-white border border-gray-100 rounded-xl p-6 mb-8 text-left">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">Quick Summary</h3>
+                    {activeSession.analysis.documentType && <span className="inline-block bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">{activeSession.analysis.documentType}</span>}
+                  </div>
+                  {activeSession.analysis.summary && <p className="text-gray-700 leading-relaxed mb-4">{activeSession.analysis.summary}</p>}
+                  <div className="flex items-center justify-between text-sm text-gray-500">
                     <span>{activeSession.documents?.[0]?.size ? formatFileSize(activeSession.documents[0].size) : ""}</span>
-                    <span>•</span>
                     <span>{new Date(activeSession.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
-                {activeSession.analysis && (
-                  <div className="flex items-center space-x-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
-                    <Eye className="w-4 h-4 text-green-600" />
-                    <span className="text-sm text-green-700 font-medium">Analysis Complete</span>
-                  </div>
-                )}
-              </div>
-            </div>
+              )}
 
-            {/* Suggested Actions */}
-            {activeSession.suggestedActions && activeSession.suggestedActions.length > 0 && (
-              <div>
-                <h3 className="text-xl font-light text-gray-900 mb-6">Recommended Actions</h3>
-                <div className="space-y-4">
-                  {activeSession.suggestedActions.map((action, index) => (
-                    <div key={action.id} className="bg-white border border-gray-100 rounded-xl p-6 hover:shadow-sm transition-all duration-200">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-4">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-700 font-medium text-sm">{index + 1}</div>
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900 mb-2">{action.description}</h4>
-                            <div className="flex items-center space-x-3">
-                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getPriorityColor(action.priority)}`}>{action.priority} Priority</span>
-                              <div className="flex items-center text-xs text-gray-500">
-                                {getSystemIcon(action.system)}
-                                <span className="ml-1">{action.system}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => executeAction(action.id)}
-                          disabled={action.status === "completed"}
-                          className={`px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${action.status === "completed" ? "bg-green-50 text-green-700 border border-green-200 cursor-not-allowed" : "bg-red-600 text-white hover:bg-red-700 hover:shadow-sm"}`}
-                        >
-                          {action.status === "completed" ? "Completed" : "Execute"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              {/* Action Buttons */}
+              <div className="space-y-4">
+                <button onClick={() => navigate(`/session/${activeSession.id}`)} className="w-full inline-flex items-center justify-center px-8 py-4 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all duration-200 shadow-sm">
+                  <Eye className="w-5 h-5 mr-3" />
+                  View Complete Analysis & Client Details
+                </button>
+
+                <div className="flex space-x-4">
+                  <button onClick={() => clearSession()} className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-all duration-200">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Process Another Document
+                  </button>
+
+                  <button onClick={() => navigate("/dashboard")} className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-all duration-200">
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    View Dashboard
+                  </button>
                 </div>
               </div>
-            )}
+
+              {/* Quick Stats */}
+              {activeSession.suggestedActions && activeSession.suggestedActions.length > 0 && (
+                <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-semibold text-red-600">{activeSession.suggestedActions.length}</span> advised actions identified • View complete analysis for detailed recommendations
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>

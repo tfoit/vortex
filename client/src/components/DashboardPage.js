@@ -1,13 +1,14 @@
 import React, { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Users, FileText, CheckCircle, Clock, TrendingUp, AlertTriangle } from "lucide-react";
+import { Users, FileText, CheckCircle, Clock, TrendingUp, AlertTriangle, ArrowLeft } from "lucide-react";
 
 import { useSession } from "../context/SessionContext";
 import VortexAnimation from "./VortexAnimation";
 
 const DashboardPage = () => {
   const { sessions, loadSessions, loading } = useSession();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadSessions();
@@ -42,6 +43,10 @@ const DashboardPage = () => {
   return (
     <main className="container">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <button onClick={() => navigate("/")} className="btn btn-secondary mb-4">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Home
+        </button>
         <h1 className="text-3xl font-bold text-on-surface mb-2">Dashboard</h1>
         <p className="text-on-surface-secondary mb-6">Overview of all advisory sessions and AI insights.</p>
       </motion.div>
