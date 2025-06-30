@@ -169,9 +169,7 @@ const HomePage = () => {
                 }
               }}
             >
-              {/* <div className="w-8 h-8">
-                <img src="/vortex-logo.png" alt="Vortex" className="w-full h-full object-contain" />
-              </div> */}
+              <img src="/ubs-logo.png" alt="UBS" className="h-10 w-auto mr-3" />
               <div className="text-lg font-light text-gray-900 tracking-wide">Vortex AI Agent</div>
             </div>
             <div className="flex items-center space-x-4">
@@ -301,8 +299,8 @@ const HomePage = () => {
       <main className="max-w-4xl mx-auto px-6 lg:px-8">
         {isProcessing ? (
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
-            <div style={{ width: 320, height: 320 }}>
-              <VortexAnimation width={320} height={320} processing={true} />
+            <div style={{ width: 640, height: 640 }}>
+              <VortexAnimation width={640} height={640} processing={true} />
             </div>
             <div className="mt-8 text-center max-w-md">
               <h2 className="text-2xl font-light text-gray-900 mb-4">Processing Document</h2>
@@ -343,8 +341,8 @@ const HomePage = () => {
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             {/* Main Logo and CTA */}
             <div className="text-center mb-12">
-              <div style={{ width: 320, height: 320 }}>
-                <VortexAnimation width={320} height={320} />
+              <div style={{ width: 640, height: 640 }}>
+                <VortexAnimation width={640} height={640} />
               </div>
             </div>
 

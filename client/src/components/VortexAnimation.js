@@ -13,7 +13,12 @@ const CALM = {
   BOND_COLOR: "rgba(80,80,80,0.18)",
   RED_BREATH_SPEED: [0.0007, 0.0012],
   RED_BREATH_AMP: 0.6,
-  PARTICLE_COUNT: 850,
+  PARTICLE_COUNT: 1700,
+  VORTEX_RADIUS: 180,
+  RADIUS_WAVE_AMP: 0,
+  RADIUS_WAVE_FREQ: 0,
+  RIM_THICKNESS_MIN: 0.5,
+  RIM_THICKNESS_MAX: 1.5,
 };
 const PROCESSING = {
   ANGULAR_SPEED: 0.0022,
@@ -26,20 +31,46 @@ const PROCESSING = {
   RED_BRIGHTNESS: 1.5,
   BOND_COLOR: "rgba(230,1,0,0.22)",
   RED_BREATH_SPEED: [0.0015, 0.0025],
-  RED_BREATH_AMP: 1.0,
-  PARTICLE_COUNT: 2500,
+  RED_BREATH_AMP: 2.0,
+  PARTICLE_COUNT: 3000,
+  VORTEX_RADIUS: 180,
+  RADIUS_WAVE_AMP: 1.5,
+  RADIUS_WAVE_FREQ: 0.3,
+  RIM_THICKNESS_MIN: 0.5,
+  RIM_THICKNESS_MAX: 1.25,
 };
-const PARTICLE_SIZE = 2;
-const VORTEX_RADIUS = 90;
+const AWAITING = {
+  ANGULAR_SPEED: 0.001,
+  SPIRAL_SPEED: 0.0001,
+  OSC_AMP_MIN: 1,
+  OSC_AMP_MAX: 3,
+  SPARK_PROBABILITY: 0.001,
+  SPARK_LIMIT: 2,
+  RED_PARTICLE_RATIO: 0.1,
+  RED_BRIGHTNESS: 1,
+  BOND_COLOR: "#0066b3", // blue cs
+  RED_BREATH_SPEED: [0.001, 0.0025],
+  RED_BREATH_AMP: 0.8,
+  PARTICLE_COUNT: 1700,
+  VORTEX_RADIUS: 169,
+  RADIUS_WAVE_AMP: 0.5,
+  RADIUS_WAVE_FREQ: 0.3,
+  RIM_THICKNESS_MIN: 0.5, // perfect ring
+  RIM_THICKNESS_MAX: 1.15, // perfect ring
+};
+const PARTICLE_SIZE = 1.5;
 const RED_PARTICLE_RATIO = 0.3;
-const BOND_DISTANCE = 32;
+const BOND_DISTANCE = 15;
 const SPARK_COOLDOWN = 300000;
 const SPARK_FADE_DURATION = 700;
 const SPARK_COLOR = "#E60000";
-const BASE_PARTICLE_COLOR_CALM = "#B5B8B1"; // Calm, subtle grey with a hint of green tone.
+const BASE_PARTICLE_COLOR_CALM = "#B3B3B3"; // Calm, subtle grey with a hint of green tone.
 const BASE_PARTICLE_COLOR_PROCESSING = "#000000";
 const ELECTRIC_PARTICLE_COLOR = "#E60000";
-const ELECTRIC_PARTICLE_RATIO = 0.4; // 40% become electric in processing
+const ELECTRIC_PARTICLE_RATIO = 0.2; // 20% become electric in processing
+const BASE_PARTICLE_COLOR_AWAITING = "#0066b3"; // blue
+const ELECTRIC_PARTICLE_COLOR_AWAITING = "#FFEA70"; // light blue
+const RIM_ANIMATION_DURATION = 1500; // ms
 
 function randomBetween(a, b) {
   return a + Math.random() * (b - a);
@@ -72,7 +103,8 @@ function createParticles(centerX, centerY, params, count, electricMode = false) 
     const isElectric = electricMode && Math.random() < ELECTRIC_PARTICLE_RATIO;
     return {
       angle: randomBetween(0, Math.PI * 2),
-      radius: randomBetween(VORTEX_RADIUS * 0.5, VORTEX_RADIUS * 1.2),
+      // radius is now calculated dynamically
+      normRadius: Math.random(), // persistent normalized radius
       speed: randomBetween(params.ANGULAR_SPEED * 0.7, params.ANGULAR_SPEED * 1.3),
       spiral: randomBetween(-params.SPIRAL_SPEED, params.SPIRAL_SPEED),
       phase: randomBetween(0, Math.PI * 2),
@@ -88,9 +120,9 @@ function createParticles(centerX, centerY, params, count, electricMode = false) 
 
 /**
  * VortexAnimation
- * @param {boolean} processing - If true, animation becomes subtly more dynamic to indicate processing.
+ * @param {"calm"|"processing"|"awaiting"} state - Animation state: calm, processing, or awaiting.
  */
-const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
+const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef();
   const particlesRef = useRef();
@@ -100,17 +132,30 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
   // Smooth particle count state
   const [targetCount, setTargetCount] = useState(CALM.PARTICLE_COUNT);
   const [currentCount, setCurrentCount] = useState(CALM.PARTICLE_COUNT);
-  const [transitionProgress, setTransitionProgress] = useState(processing ? 1 : 0); // 0: calm, 1: processing
+  const [transitionProgress, setTransitionProgress] = useState(0); // 0: calm, 1: processing, 2: awaiting
 
-  // Helper to interpolate between calm and processing values
-  function lerp(a, b, t) {
-    return a + (b - a) * t;
+  // Helper to interpolate between three states
+  function lerp3(a, b, c, t) {
+    if (t < 1) return lerp(a, b, t);
+    return lerp(b, c, t - 1);
   }
 
-  // Smoothly update target particle count on processing change
+  // Map state to numeric progress for interpolation
+  function stateToProgress(state) {
+    if (state === "calm") return 0;
+    if (state === "processing") return 1;
+    if (state === "awaiting") return 2;
+    return 0;
+  }
+
+  // Smoothly update target particle count on state change
   useEffect(() => {
-    setTargetCount(processing ? PROCESSING.PARTICLE_COUNT : CALM.PARTICLE_COUNT);
-  }, [processing]);
+    const progress = stateToProgress(state);
+    setTransitionProgress(progress);
+    if (progress < 1) setTargetCount(CALM.PARTICLE_COUNT);
+    else if (progress < 2) setTargetCount(PROCESSING.PARTICLE_COUNT);
+    else setTargetCount(AWAITING.PARTICLE_COUNT);
+  }, [state]);
 
   // Animate currentCount toward targetCount smoothly over 3 seconds
   useEffect(() => {
@@ -142,7 +187,7 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
     const DURATION = 700; // ms for color transition
     const start = performance.now();
     const from = transitionProgress;
-    const to = processing ? 1 : 0;
+    const to = stateToProgress(state);
     function animate() {
       const now = performance.now();
       const t = Math.min(1, (now - start) / DURATION);
@@ -151,35 +196,37 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
     }
     animate();
     return () => raf && cancelAnimationFrame(raf);
-  }, [processing]);
+  }, [state]);
 
   useEffect(() => {
-    // Interpolate parameters for subtle transition
-    const t = processing ? 1 : 0;
+    // Interpolate parameters for three states
+    const t = transitionProgress;
     const params = {
-      ANGULAR_SPEED: lerp(CALM.ANGULAR_SPEED, PROCESSING.ANGULAR_SPEED, t),
-      SPIRAL_SPEED: lerp(CALM.SPIRAL_SPEED, PROCESSING.SPIRAL_SPEED, t),
-      OSC_AMP_MIN: lerp(CALM.OSC_AMP_MIN, PROCESSING.OSC_AMP_MIN, t),
-      OSC_AMP_MAX: lerp(CALM.OSC_AMP_MAX, PROCESSING.OSC_AMP_MAX, t),
-      SPARK_PROBABILITY: lerp(CALM.SPARK_PROBABILITY, PROCESSING.SPARK_PROBABILITY, t),
-      SPARK_LIMIT: Math.round(lerp(CALM.SPARK_LIMIT, PROCESSING.SPARK_LIMIT, t)),
-      RED_PARTICLE_RATIO: lerp(CALM.RED_PARTICLE_RATIO, PROCESSING.RED_PARTICLE_RATIO, t),
-      RED_BRIGHTNESS: lerp(CALM.RED_BRIGHTNESS, PROCESSING.RED_BRIGHTNESS, t),
-      BOND_COLOR: t > 0.5 ? PROCESSING.BOND_COLOR : CALM.BOND_COLOR,
-      RED_BREATH_SPEED: [lerp(CALM.RED_BREATH_SPEED[0], PROCESSING.RED_BREATH_SPEED[0], t), lerp(CALM.RED_BREATH_SPEED[1], PROCESSING.RED_BREATH_SPEED[1], t)],
-      RED_BREATH_AMP: lerp(CALM.RED_BREATH_AMP, PROCESSING.RED_BREATH_AMP, t),
+      ANGULAR_SPEED: lerp3(CALM.ANGULAR_SPEED, PROCESSING.ANGULAR_SPEED, AWAITING.ANGULAR_SPEED, t),
+      SPIRAL_SPEED: lerp3(CALM.SPIRAL_SPEED, PROCESSING.SPIRAL_SPEED, AWAITING.SPIRAL_SPEED, t),
+      OSC_AMP_MIN: lerp3(CALM.OSC_AMP_MIN, PROCESSING.OSC_AMP_MIN, AWAITING.OSC_AMP_MIN, t),
+      OSC_AMP_MAX: lerp3(CALM.OSC_AMP_MAX, PROCESSING.OSC_AMP_MAX, AWAITING.OSC_AMP_MAX, t),
+      SPARK_PROBABILITY: lerp3(CALM.SPARK_PROBABILITY, PROCESSING.SPARK_PROBABILITY, AWAITING.SPARK_PROBABILITY, t),
+      SPARK_LIMIT: Math.round(lerp3(CALM.SPARK_LIMIT, PROCESSING.SPARK_LIMIT, AWAITING.SPARK_LIMIT, t)),
+      RED_PARTICLE_RATIO: lerp3(CALM.RED_PARTICLE_RATIO, PROCESSING.RED_PARTICLE_RATIO, AWAITING.RED_PARTICLE_RATIO, t),
+      RED_BRIGHTNESS: lerp3(CALM.RED_BRIGHTNESS, PROCESSING.RED_BRIGHTNESS, AWAITING.RED_BRIGHTNESS, t),
+      BOND_COLOR: t < 1 ? CALM.BOND_COLOR : t < 2 ? PROCESSING.BOND_COLOR : AWAITING.BOND_COLOR,
+      RED_BREATH_SPEED: [lerp3(CALM.RED_BREATH_SPEED[0], PROCESSING.RED_BREATH_SPEED[0], AWAITING.RED_BREATH_SPEED[0], t), lerp3(CALM.RED_BREATH_SPEED[1], PROCESSING.RED_BREATH_SPEED[1], AWAITING.RED_BREATH_SPEED[1], t)],
+      RED_BREATH_AMP: lerp3(CALM.RED_BREATH_AMP, PROCESSING.RED_BREATH_AMP, AWAITING.RED_BREATH_AMP, t),
+      VORTEX_RADIUS: lerp3(CALM.VORTEX_RADIUS, PROCESSING.VORTEX_RADIUS, AWAITING.VORTEX_RADIUS, t),
+      RADIUS_WAVE_AMP: lerp3(CALM.RADIUS_WAVE_AMP, PROCESSING.RADIUS_WAVE_AMP, AWAITING.RADIUS_WAVE_AMP, t),
+      RADIUS_WAVE_FREQ: lerp3(CALM.RADIUS_WAVE_FREQ, PROCESSING.RADIUS_WAVE_FREQ, AWAITING.RADIUS_WAVE_FREQ, t),
+      RIM_THICKNESS_MIN: lerp3(CALM.RIM_THICKNESS_MIN, PROCESSING.RIM_THICKNESS_MIN, AWAITING.RIM_THICKNESS_MIN, t),
+      RIM_THICKNESS_MAX: lerp3(CALM.RIM_THICKNESS_MAX, PROCESSING.RIM_THICKNESS_MAX, AWAITING.RIM_THICKNESS_MAX, t),
     };
     const centerX = width / 2;
     const centerY = height / 2;
-    // If particle count changes, preserve as many as possible
     let oldParticles = particlesRef.current || [];
     let newParticles = oldParticles.slice(0, currentCount);
     if (currentCount > oldParticles.length) {
-      // Add new particles
-      newParticles = newParticles.concat(createParticles(centerX, centerY, params, currentCount - oldParticles.length, processing));
+      newParticles = newParticles.concat(createParticles(centerX, centerY, params, currentCount - oldParticles.length, state === "processing"));
     }
-    // If transitioning from processing to calm, remove isElectric
-    if (!processing) {
+    if (state !== "processing") {
       newParticles = newParticles.map((p) => ({ ...p, isElectric: false }));
     }
     particlesRef.current = newParticles;
@@ -196,13 +243,14 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
       for (let i = 0; i < particles.length; i++) {
         const p1 = particles[i];
         const organic1 = Math.sin(timeRef.current * p1.oscSpeed + p1.phase) * p1.oscAmp;
-        const x1 = centerX + Math.cos(p1.angle) * (p1.radius + organic1);
-        const y1 = centerY + Math.sin(p1.angle) * (p1.radius + organic1);
+        const animatedRadius = params.VORTEX_RADIUS + Math.sin(timeRef.current * params.RADIUS_WAVE_FREQ) * params.RADIUS_WAVE_AMP;
+        const x1 = centerX + Math.cos(p1.angle) * (animatedRadius * (p1.radius / params.VORTEX_RADIUS) + organic1);
+        const y1 = centerY + Math.sin(p1.angle) * (animatedRadius * (p1.radius / params.VORTEX_RADIUS) + organic1);
         for (let j = i + 1; j < Math.min(i + 8, particles.length); j++) {
           const p2 = particles[j];
           const organic2 = Math.sin(timeRef.current * p2.oscSpeed + p2.phase) * p2.oscAmp;
-          const x2 = centerX + Math.cos(p2.angle) * (p2.radius + organic2);
-          const y2 = centerY + Math.sin(p2.angle) * (p2.radius + organic2);
+          const x2 = centerX + Math.cos(p2.angle) * (animatedRadius * (p2.radius / params.VORTEX_RADIUS) + organic2);
+          const y2 = centerY + Math.sin(p2.angle) * (animatedRadius * (p2.radius / params.VORTEX_RADIUS) + organic2);
           const dx = x2 - x1;
           const dy = y2 - y1;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -251,14 +299,19 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
       }
       // Draw particles
       for (let p of particles) {
+        // Calculate dynamic radius on every frame
+        const currentMin = params.VORTEX_RADIUS * params.RIM_THICKNESS_MIN;
+        const currentMax = params.VORTEX_RADIUS * params.RIM_THICKNESS_MAX;
+        p.radius = currentMin + p.normRadius * (currentMax - currentMin);
+
         p.angle += p.speed;
+        p.spiral = p.radius < params.VORTEX_RADIUS * 0.5 || p.radius > params.VORTEX_RADIUS * 1.2 ? -p.spiral : p.spiral;
         p.radius += p.spiral;
-        if (p.radius < VORTEX_RADIUS * 0.5 || p.radius > VORTEX_RADIUS * 1.2) {
-          p.spiral *= -1;
-        }
+
+        const animatedRadius = params.VORTEX_RADIUS + Math.sin(timeRef.current * params.RADIUS_WAVE_FREQ) * params.RADIUS_WAVE_AMP;
         const organic = Math.sin(timeRef.current * p.oscSpeed + p.phase) * p.oscAmp;
-        const x = centerX + Math.cos(p.angle) * (p.radius + organic);
-        const y = centerY + Math.sin(p.angle) * (p.radius + organic);
+        const x = centerX + Math.cos(p.angle) * (animatedRadius * (p.radius / params.VORTEX_RADIUS) + organic);
+        const y = centerY + Math.sin(p.angle) * (animatedRadius * (p.radius / params.VORTEX_RADIUS) + organic);
         let color;
         let alpha = 0.7;
         if (p.isRed) {
@@ -270,11 +323,23 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
           const b = Math.min(60, Math.round(0 * params.RED_BRIGHTNESS));
           color = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
         } else if (p.isElectric) {
-          // Blend from white to electric red based on transitionProgress
-          color = lerpColor(BASE_PARTICLE_COLOR_CALM, ELECTRIC_PARTICLE_COLOR, transitionProgress);
+          // Blend from white to electric red or gold based on transitionProgress
+          if (transitionProgress < 1) {
+            color = lerpColor(BASE_PARTICLE_COLOR_CALM, ELECTRIC_PARTICLE_COLOR, transitionProgress);
+          } else if (transitionProgress < 2) {
+            color = lerpColor(ELECTRIC_PARTICLE_COLOR, ELECTRIC_PARTICLE_COLOR_AWAITING, transitionProgress - 1);
+          } else {
+            color = ELECTRIC_PARTICLE_COLOR_AWAITING;
+          }
         } else {
-          // Blend from white to black based on transitionProgress
-          color = lerpColor(BASE_PARTICLE_COLOR_CALM, BASE_PARTICLE_COLOR_PROCESSING, transitionProgress);
+          // Blend from calm to processing to awaiting
+          if (transitionProgress < 1) {
+            color = lerpColor(BASE_PARTICLE_COLOR_CALM, BASE_PARTICLE_COLOR_PROCESSING, transitionProgress);
+          } else if (transitionProgress < 2) {
+            color = lerpColor(BASE_PARTICLE_COLOR_PROCESSING, BASE_PARTICLE_COLOR_AWAITING, transitionProgress - 1);
+          } else {
+            color = BASE_PARTICLE_COLOR_AWAITING;
+          }
         }
         ctx.beginPath();
         ctx.arc(x, y, PARTICLE_SIZE, 0, Math.PI * 2);
@@ -293,7 +358,7 @@ const VortexAnimation = ({ width = 320, height = 320, processing = false }) => {
       running = false;
       cancelAnimationFrame(animationRef.current);
     };
-  }, [width, height, processing, currentCount]);
+  }, [width, height, state, currentCount]);
 
   return <canvas ref={canvasRef} width={width} height={height} style={{ display: "block", margin: "0 auto", background: "white", borderRadius: "50%" }} aria-label="Vortex animation" />;
 };
