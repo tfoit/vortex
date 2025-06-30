@@ -6,10 +6,12 @@ import DashboardPage from "./components/DashboardPage";
 import { SessionProvider } from "./context/SessionContext";
 import { apiService } from "./services/apiService";
 import "./App.css";
+import VortexAnimation from "./components/VortexAnimation";
 
 function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [appError, setAppError] = useState(null);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     // Handle online/offline status
@@ -63,6 +65,24 @@ function App() {
     <SessionProvider>
       <Router>
         <div className="App">
+          <button
+            onClick={() => setProcessing((p) => !p)}
+            style={{
+              margin: "24px auto 12px",
+              display: "block",
+              padding: "8px 20px",
+              fontSize: "1rem",
+              borderRadius: "6px",
+              border: "1px solid #ccc",
+              background: processing ? "#E60100" : "#f5f5f5",
+              color: processing ? "white" : "#222",
+              cursor: "pointer",
+              transition: "background 0.2s, color 0.2s",
+            }}
+          >
+            {processing ? "Stop Processing" : "Start Processing"}
+          </button>
+          <VortexAnimation processing={processing} />
           {!isOnline && <div className="bg-yellow-500 text-white px-4 py-2 text-center">⚠️ You're offline. Some features may not be available.</div>}
 
           <main>
