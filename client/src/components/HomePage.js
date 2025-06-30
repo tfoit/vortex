@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSession } from "../context/SessionContext";
 import { Menu, X, Clock, CheckCircle, AlertTriangle, Eye, Upload, Camera, TrendingUp } from "lucide-react";
 import CameraCapture from "./CameraCapture";
+import VortexAnimation from "./VortexAnimation";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -148,25 +149,6 @@ const HomePage = () => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
-
-  // Vortex Logo Component with Enhanced Animation
-  const VortexLogo = ({ size = "w-24 h-24", animate = false }) => (
-    <div className={`relative ${size}`}>
-      <div className={`${animate ? "animate-spin" : ""} transition-transform duration-300`} style={{ animationDuration: animate ? "2s" : "0s" }}>
-        <img src="/vortex-logo.png" alt="Vortex" className="w-full h-full object-contain" />
-      </div>
-      {animate && (
-        <>
-          <div className="absolute -inset-4 bg-red-600 rounded-full opacity-20 blur-xl animate-pulse"></div>
-          <div className="absolute -inset-2 border-2 border-red-400 rounded-full animate-ping opacity-30"></div>
-          <div className="absolute -inset-6 border border-red-300 rounded-full animate-pulse opacity-20"></div>
-          {/* Whoosh effect */}
-          <div className="absolute -inset-8 border border-red-200 rounded-full animate-ping opacity-10" style={{ animationDelay: "0.5s" }}></div>
-          <div className="absolute -inset-10 border border-red-100 rounded-full animate-ping opacity-5" style={{ animationDelay: "1s" }}></div>
-        </>
-      )}
-    </div>
-  );
 
   if (showCamera) {
     return <CameraCapture onBack={() => setShowCamera(false)} />;
@@ -319,7 +301,9 @@ const HomePage = () => {
       <main className="max-w-4xl mx-auto px-6 lg:px-8">
         {isProcessing ? (
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
-            <VortexLogo size="w-32 h-32" animate={true} />
+            <div style={{ width: 320, height: 320 }}>
+              <VortexAnimation width={320} height={320} processing={true} />
+            </div>
             <div className="mt-8 text-center max-w-md">
               <h2 className="text-2xl font-light text-gray-900 mb-4">Processing Document</h2>
 
@@ -359,7 +343,9 @@ const HomePage = () => {
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             {/* Main Logo and CTA */}
             <div className="text-center mb-12">
-              <VortexLogo size="w-120 h-120" />
+              <div style={{ width: 320, height: 320 }}>
+                <VortexAnimation width={320} height={320} />
+              </div>
             </div>
 
             {/* Upload Area */}

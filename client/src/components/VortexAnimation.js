@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 
 // Animation parameters for calm and processing states
 const CALM = {
-  ANGULAR_SPEED: 0.0012,
+  ANGULAR_SPEED: 0.0005,
   SPIRAL_SPEED: 0.008,
   OSC_AMP_MIN: 2,
   OSC_AMP_MAX: 7,
@@ -13,7 +13,7 @@ const CALM = {
   BOND_COLOR: "rgba(80,80,80,0.18)",
   RED_BREATH_SPEED: [0.0007, 0.0012],
   RED_BREATH_AMP: 0.6,
-  PARTICLE_COUNT: 1050,
+  PARTICLE_COUNT: 850,
 };
 const PROCESSING = {
   ANGULAR_SPEED: 0.0022,
@@ -36,8 +36,7 @@ const BOND_DISTANCE = 32;
 const SPARK_COOLDOWN = 300000;
 const SPARK_FADE_DURATION = 700;
 const SPARK_COLOR = "#E60000";
-const PARTICLE_COLOR = "#9EA0A1";
-const BASE_PARTICLE_COLOR_CALM = "#D0D0D0";
+const BASE_PARTICLE_COLOR_CALM = "#B5B8B1"; // Calm, subtle grey with a hint of green tone.
 const BASE_PARTICLE_COLOR_PROCESSING = "#000000";
 const ELECTRIC_PARTICLE_COLOR = "#E60000";
 const ELECTRIC_PARTICLE_RATIO = 0.4; // 40% become electric in processing
