@@ -360,8 +360,8 @@ const SessionPage = () => {
                 )}
               </div>
 
-              {/* Vision Analysis Button for Images */}
-              {isImageDocument && !hasVisionAnalysis && (
+              {/* Vision Analysis Button for Images - Always available after upload */}
+              {isImageDocument && (
                 <button onClick={handleVisionAnalysis} disabled={visionAnalyzing} className="w-full btn btn-primary text-sm">
                   {visionAnalyzing ? (
                     <>
@@ -371,7 +371,7 @@ const SessionPage = () => {
                   ) : (
                     <>
                       <Eye className="w-4 h-4" />
-                      Enhance with Vision AI
+                      {hasVisionAnalysis ? "Re-analyze with Vision AI" : "Enhance with Vision AI"}
                     </>
                   )}
                 </button>
