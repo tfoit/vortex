@@ -17,6 +17,13 @@ const HomePage = () => {
   // Use processing stage from context
   const processingStage = contextProcessingStage;
 
+  // Debug processing stage changes
+  useEffect(() => {
+    if (processingStage) {
+      console.log("🎯 [DEBUG] HomePage received processing stage:", processingStage);
+    }
+  }, [processingStage]);
+
   // Mobile responsive sizing for vortex animation
   useEffect(() => {
     const updateVortexSize = () => {
@@ -54,7 +61,7 @@ const HomePage = () => {
       };
     }
 
-    console.log("🔍 Current processing stage:", processingStage);
+    console.log("🔍 [DEBUG] Current processing stage for stageStatus calculation:", processingStage);
 
     // Session setup is complete when we start processing or beyond
     const isSessionCreated =
@@ -75,12 +82,15 @@ const HomePage = () => {
     // Review is ready only when processing is completely finished
     const isReviewReady = processingStage.includes("Processing complete!");
 
-    return {
+    const calculatedStatus = {
       sessionCreated: isSessionCreated,
       visionCompleted: isVisionCompleted,
       aiCompleted: isAICompleted,
       reviewReady: isReviewReady,
     };
+
+    console.log("🔍 [DEBUG] Calculated stage status:", calculatedStatus);
+    return calculatedStatus;
   }, [processingStage]);
 
   // Effect to handle navigation after processing is truly complete

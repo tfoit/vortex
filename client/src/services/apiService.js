@@ -108,7 +108,10 @@ class ApiService {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log(`📡 SSE Status Update:`, data);
+        console.log(`📡 [DEBUG] SSE Raw Event:`, event);
+        console.log(`📡 [DEBUG] SSE Parsed Data:`, data);
+        console.log(`📡 [DEBUG] SSE Message Type:`, data.type);
+        console.log(`📡 [DEBUG] SSE Message Content:`, data.message);
 
         // Check if processing is complete
         if (data.type === "processing_complete" || data.type === "complete" || data.message?.includes("Processing complete")) {

@@ -269,64 +269,92 @@ export function SessionProvider({ children }) {
 
         // SSE status update callback for real-time processing feedback
         const statusUpdateCallback = (statusData) => {
-          console.log("📡 Received status update:", statusData);
+          console.log("📡 [DEBUG] Raw SSE status received:", statusData);
+          console.log("📡 [DEBUG] Status type:", statusData.type);
+          console.log("📡 [DEBUG] Status message:", statusData.message);
+          console.log("📡 [DEBUG] Current processing stage before update:", state.processingStage);
 
           // Update processing stage based on status type
+          let newStage = "";
           switch (statusData.type) {
             case "upload_start":
-              setProcessingStage("Document upload started");
+              newStage = "Document upload started";
+              setProcessingStage(newStage);
               break;
             case "session_validated":
-              setProcessingStage("Session validated");
+              newStage = "Session validated";
+              setProcessingStage(newStage);
               break;
             case "processing_start":
-              setProcessingStage("Starting document processing");
+              newStage = "Starting document processing";
+              setProcessingStage(newStage);
               break;
             case "vision_start":
-              setProcessingStage("Image detected - starting vision processing");
+              newStage = "Image detected - starting vision processing";
+              setProcessingStage(newStage);
               break;
             case "vision_processing":
-              setProcessingStage("Processing with AI vision model...");
+              newStage = "Processing with AI vision model...";
+              setProcessingStage(newStage);
               break;
             case "vision_complete":
-              setProcessingStage("Vision processing completed");
+              newStage = "Vision processing completed";
+              setProcessingStage(newStage);
               break;
             case "text_extraction_start":
-              setProcessingStage("Extracting text from document");
+              newStage = "Extracting text from document";
+              setProcessingStage(newStage);
               break;
             case "text_extraction_complete":
-              setProcessingStage("Text extraction completed");
+              newStage = "Text extraction completed";
+              setProcessingStage(newStage);
               break;
             case "ai_analysis_start":
-              setProcessingStage("Running AI analysis...");
+              newStage = "Running AI analysis...";
+              setProcessingStage(newStage);
               break;
             case "ai_analysis_complete":
-              setProcessingStage("AI analysis completed");
+              newStage = "AI analysis completed";
+              setProcessingStage(newStage);
               break;
             case "saving_document":
-              setProcessingStage("Saving document to session");
+              newStage = "Saving document to session";
+              setProcessingStage(newStage);
               break;
             case "processing_complete":
-              setProcessingStage("Processing complete!");
+              newStage = "Processing complete!";
+              setProcessingStage(newStage);
               break;
             case "complete":
-              setProcessingStage("Processing complete!");
+              newStage = "Processing complete!";
+              setProcessingStage(newStage);
               break;
             case "error":
-              setProcessingStage(`Error: ${statusData.message}`);
+              newStage = `Error: ${statusData.message}`;
+              setProcessingStage(newStage);
               break;
             default:
               if (statusData.message) {
-                setProcessingStage(statusData.message);
+                newStage = statusData.message;
+                setProcessingStage(newStage);
+              } else {
+                console.log("📡 [DEBUG] Unknown status type, no action taken:", statusData.type);
               }
           }
 
+          console.log("📡 [DEBUG] Setting new stage:", newStage);
+          console.log("📡 [DEBUG] Status type matched:", statusData.type);
+
           // Update progress if provided
           if (statusData.progress !== null && statusData.progress !== undefined) {
+            console.log("📡 [DEBUG] Setting progress:", statusData.progress);
             setUploadProgress(statusData.progress);
+          } else {
+            console.log("📡 [DEBUG] No progress in status update");
           }
 
           // Store detailed status info
+          console.log("📡 [DEBUG] Storing processing details:", statusData);
           setProcessingDetails(statusData);
         };
 
