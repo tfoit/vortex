@@ -95,13 +95,38 @@ class ApiService {
     console.log(`📡 Connecting to processing status stream: ${statusUrl}`);
 
     const eventSource = new EventSource(statusUrl);
+    let isProcessingComplete = false;
+
+    // Safety timeout in case processing complete message is missed
+    const safetyTimeout = setTimeout(() => {
+      if (!isProcessingComplete) {
+        console.warn("⚠️ SSE safety timeout reached, closing connection");
+        eventSource.close();
+      }
+    }, 30000); // 30 second safety timeout
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         console.log(`📡 SSE Status Update:`, data);
+
+        // Check if processing is complete
+        if (data.type === "processing_complete" || data.type === "complete" || data.message?.includes("Processing complete")) {
+          isProcessingComplete = true;
+          console.log(`🎯 Processing complete detected (type: ${data.type}), will close SSE connection after callback`);
+          clearTimeout(safetyTimeout);
+        }
+
         if (onStatusUpdate) {
           onStatusUpdate(data);
+        }
+
+        // Close connection after processing complete message is handled
+        if (isProcessingComplete) {
+          setTimeout(() => {
+            console.log(`📡 Closing SSE connection after processing completion`);
+            eventSource.close();
+          }, 500); // Small delay to ensure UI updates
         }
       } catch (error) {
         console.error("Error parsing SSE data:", error);
@@ -110,6 +135,10 @@ class ApiService {
 
     eventSource.onerror = (error) => {
       console.error("SSE connection error:", error);
+      clearTimeout(safetyTimeout);
+      if (!isProcessingComplete) {
+        console.log("SSE error occurred before processing completion");
+      }
       eventSource.close();
     };
 
@@ -144,12 +173,8 @@ class ApiService {
 
       console.log(`✅ Mobile Upload: Upload completed successfully`);
 
-      // Close SSE connection after a delay to ensure we get final updates
-      if (eventSource) {
-        setTimeout(() => {
-          eventSource.close();
-        }, 2000);
-      }
+      // SSE connection will close itself when processing is complete
+      // No need to manually close it here
 
       return response.data;
     } catch (error) {

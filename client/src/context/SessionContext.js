@@ -309,6 +309,9 @@ export function SessionProvider({ children }) {
             case "processing_complete":
               setProcessingStage("Processing complete!");
               break;
+            case "complete":
+              setProcessingStage("Processing complete!");
+              break;
             case "error":
               setProcessingStage(`Error: ${statusData.message}`);
               break;
