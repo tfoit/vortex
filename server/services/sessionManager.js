@@ -159,25 +159,32 @@ class SessionManager {
 
   addAnalysisToDocument(sessionId, documentId, analysis) {
     const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
+    if (session) {
+      const document = session.documents.find((d) => d.id === documentId);
+      if (document) {
+        document.analysis = analysis;
+        session.metadata.lastActivity = new Date().toISOString();
+
+        // Save to persistent storage
+        this.saveSessions().catch((err) => console.error("Error saving session:", err));
+      }
     }
+  }
 
-    const document = session.documents.find((d) => d.id === documentId);
-    if (!document) {
-      throw new Error(`Document ${documentId} not found in session ${sessionId}`);
+  addArchiveToDocument(sessionId, documentId, archiveInfo) {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      const document = session.documents.find((d) => d.id === documentId);
+      if (document) {
+        document.archive = archiveInfo;
+        session.metadata.lastActivity = new Date().toISOString();
+
+        // Save to persistent storage
+        this.saveSessions().catch((err) => console.error("Error saving session:", err));
+
+        console.log(`🗄️  Archive info added to document ${documentId} in session ${sessionId}`);
+      }
     }
-
-    document.analysis = analysis;
-    session.analysis = analysis;
-    session.suggestedActions = analysis.suggestedActions || [];
-
-    console.log(`📊 Added analysis to document ${documentId}`);
-
-    // Save to persistent storage
-    this.saveSessions().catch((err) => console.error("Error saving session:", err));
-
-    return document;
   }
 
   createSubSession(sessionId, actionId, actionData) {

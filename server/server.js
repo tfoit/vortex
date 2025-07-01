@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs").promises;
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 require("dotenv").config();
 
 const { SessionManager } = require("./services/sessionManager");
@@ -14,6 +15,9 @@ const { MockBankingService } = require("./services/mockBankingService");
 
 const app = express();
 const PORT = process.env.PORT || 7775;
+
+const uploadsDir = path.join(__dirname, "uploads");
+const archivesDir = path.join(__dirname, "archives"); // New archives directory
 
 // Initialize services
 const sessionManager = new SessionManager();
@@ -86,8 +90,18 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
+
+// Ensure directories exist
+(async () => {
+  try {
+    await fs.mkdir(uploadsDir, { recursive: true });
+    await fs.mkdir(archivesDir, { recursive: true }); // Create archives dir
+    console.log("Uploads and Archives directories are ready.");
+  } catch (error) {
+    console.error("Error creating directories:", error);
+  }
+})();
 
 // Serve uploaded files statically with CORS headers
 app.use(
@@ -312,28 +326,55 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
       sendStatusUpdate(sessionId, "vision_start", "Image detected - starting vision-based processing", 40);
       processingMethod = "vision";
 
+      // Add realistic delay to show vision start stage
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       // Use vision model for comprehensive analysis (includes text extraction)
       sendStatusUpdate(sessionId, "vision_processing", "Processing image with AI vision model...", 50);
+
+      // Add delay during vision processing to show progress
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       analysis = await documentProcessor.getImageAnalysis(file.path, "advisory_minutes");
       documentText = analysis.extractedText || "";
       console.log(`👁️ Server: Vision analysis completed - extracted ${documentText.length} characters`);
+
+      // Add delay to show completion
+      await new Promise((resolve) => setTimeout(resolve, 600));
       sendStatusUpdate(sessionId, "vision_complete", `Vision analysis completed - extracted ${documentText.length} characters`, 70);
     } else {
       console.log("📄 Server: Non-image document - using text extraction");
       sendStatusUpdate(sessionId, "text_extraction_start", "Processing text document", 40);
       processingMethod = "text_extraction";
+
+      // Add realistic delay for text extraction
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       documentText = await documentProcessor.processDocument(file.path, file.mimetype);
       console.log(`📝 Server: Text extraction completed - ${documentText.length} characters`);
+
+      // Add delay to show completion
+      await new Promise((resolve) => setTimeout(resolve, 400));
       sendStatusUpdate(sessionId, "text_extraction_complete", `Text extraction completed - ${documentText.length} characters`, 60);
     }
 
     // If we don't have analysis yet (non-image or vision failed), run AI analysis
     if (!analysis && documentText.length > 0) {
       console.log("🤖 Server: Running AI analysis on extracted text...");
+
+      // Add delay before starting AI analysis
+      await new Promise((resolve) => setTimeout(resolve, 600));
       sendStatusUpdate(sessionId, "ai_analysis_start", "Running AI analysis on extracted text...", 75);
+
       try {
+        // Add delay during AI analysis
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+
         analysis = await aiService.analyzeAdvisoryMinutes(documentText);
         console.log("✅ Server: AI analysis completed");
+
+        // Add delay to show AI completion
+        await new Promise((resolve) => setTimeout(resolve, 500));
         sendStatusUpdate(sessionId, "ai_analysis_complete", `AI analysis completed with ${analysis?.suggestedActions?.length || 0} suggested actions`, 85);
       } catch (aiError) {
         console.error("❌ Server: AI analysis failed:", aiError.message);
@@ -359,6 +400,8 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
 
     // Add document to session with complete analysis
     console.log("💾 Server: Saving document with complete analysis to session...");
+    // Add delay before saving
+    await new Promise((resolve) => setTimeout(resolve, 500));
     sendStatusUpdate(sessionId, "saving_document", "Saving document with analysis to session...", 90);
     const document = sessionManager.addDocument(sessionId, {
       filename: file.filename,
@@ -383,24 +426,27 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
     console.log("📤 Server: Sending complete response to client");
     console.log(`🎯 Server: Processing summary - Method: ${processingMethod}, Text: ${documentText.length} chars, Actions: ${analysis?.suggestedActions?.length || 0}`);
 
-    // Send final completion status with longer delay to ensure client receives it
+    // Send final completion status with delay to ensure client receives all previous steps
     setTimeout(() => {
-      sendStatusUpdate(sessionId, "processing_complete", `Processing complete! Found ${analysis?.suggestedActions?.length || 0} suggested actions`, 100);
-
-      // Close SSE connection after ensuring completion message is sent
+      // Add delay to show saving completion
       setTimeout(() => {
-        if (global.sseConnections && global.sseConnections.has(sessionId)) {
-          try {
-            const sseRes = global.sseConnections.get(sessionId);
-            console.log(`📡 SSE: Closing connection for ${sessionId} after processing completion`);
-            sseRes.end();
-          } catch (error) {
-            console.error("Error closing SSE connection:", error.message);
+        sendStatusUpdate(sessionId, "processing_complete", `Processing complete! Found ${analysis?.suggestedActions?.length || 0} suggested actions`, 100);
+
+        // Close SSE connection after ensuring completion message is sent and client has time to navigate
+        setTimeout(() => {
+          if (global.sseConnections && global.sseConnections.has(sessionId)) {
+            try {
+              const sseRes = global.sseConnections.get(sessionId);
+              console.log(`📡 SSE: Closing connection for ${sessionId} after processing completion`);
+              sseRes.end();
+            } catch (error) {
+              console.error("Error closing SSE connection:", error.message);
+            }
+            global.sseConnections.delete(sessionId);
           }
-          global.sseConnections.delete(sessionId);
-        }
-      }, 2000); // Give client time to process the completion message
-    }, 500); // Brief delay to ensure document is saved first
+        }, 4000); // Increased delay to give client time to navigate (3s navigation + 1s buffer)
+      }, 800); // Delay for saving completion display
+    }, 200); // Brief delay to ensure document is saved first
 
     res.json(response);
   } catch (error) {
@@ -683,6 +729,257 @@ app.post("/api/ai/provider", async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+// Archive a document
+app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, res) => {
+  try {
+    const { sessionId, documentId } = req.params;
+    console.log(`📄 Archiving document ${documentId} for session ${sessionId}...`);
+
+    const session = sessionManager.getSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const document = session.documents.find((d) => d.id === documentId);
+    if (!document) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    // --- PDF Creation Logic ---
+    const pdfDoc = await PDFDocument.create();
+    let page = pdfDoc.addPage();
+    const { width, height } = page.getSize();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontSize = 12;
+    const titleSize = 20;
+    const headerSize = 14;
+    let y = height - 50;
+
+    // Helper function to add new page when needed
+    const checkAndAddPage = (requiredSpace = 30) => {
+      if (y < requiredSpace) {
+        page = pdfDoc.addPage();
+        y = height - 50;
+      }
+    };
+
+    // Add Title
+    page.drawText("Archived Document Report", {
+      x: 50,
+      y,
+      font: boldFont,
+      size: titleSize,
+      color: rgb(0, 0, 0),
+    });
+    y -= 50;
+
+    // Add metadata section
+    page.drawText("Document Information", {
+      x: 50,
+      y,
+      font: boldFont,
+      size: headerSize,
+      color: rgb(0, 0, 0),
+    });
+    y -= 25;
+
+    const metadata = [
+      `Document ID: ${document.id}`,
+      `Original Filename: ${document.filename}`,
+      `File Size: ${document.size ? Math.round(document.size / 1024) + " KB" : "Unknown"}`,
+      `MIME Type: ${document.mimetype}`,
+      `Uploaded: ${new Date(document.uploadedAt).toLocaleString()}`,
+      `Archived: ${new Date().toLocaleString()}`,
+    ];
+
+    for (const line of metadata) {
+      checkAndAddPage();
+      page.drawText(line, { x: 50, y, font, size: fontSize, color: rgb(0, 0, 0) });
+      y -= 18;
+    }
+
+    y -= 20;
+
+    // If it's an image, embed it
+    if (document.mimetype.startsWith("image/")) {
+      try {
+        checkAndAddPage(300);
+        page.drawText("Document Preview", {
+          x: 50,
+          y,
+          font: boldFont,
+          size: headerSize,
+          color: rgb(0, 0, 0),
+        });
+        y -= 30;
+
+        const imageBytes = await fs.readFile(document.path);
+        let image;
+
+        // Handle different image formats
+        if (document.mimetype.includes("png")) {
+          image = await pdfDoc.embedPng(imageBytes);
+        } else if (document.mimetype.includes("jpeg") || document.mimetype.includes("jpg")) {
+          image = await pdfDoc.embedJpg(imageBytes);
+        } else {
+          // Fallback for other formats
+          console.log(`⚠️ Unsupported image format: ${document.mimetype}, skipping image embed`);
+        }
+
+        if (image) {
+          // Scale image to fit page while maintaining aspect ratio
+          const maxWidth = width - 100;
+          const maxHeight = 400;
+          const imageScale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+          const scaledWidth = image.width * imageScale;
+          const scaledHeight = image.height * imageScale;
+
+          checkAndAddPage(scaledHeight + 20);
+          page.drawImage(image, {
+            x: 50,
+            y: y - scaledHeight,
+            width: scaledWidth,
+            height: scaledHeight,
+          });
+          y -= scaledHeight + 30;
+        }
+      } catch (imageError) {
+        console.error("Error embedding image:", imageError);
+        checkAndAddPage();
+        page.drawText("Error: Could not embed image preview", {
+          x: 50,
+          y,
+          font,
+          size: fontSize,
+          color: rgb(0.8, 0, 0),
+        });
+        y -= 20;
+      }
+    }
+
+    // Add Analysis section
+    if (document.analysis) {
+      checkAndAddPage(50);
+      page.drawText("AI Analysis Results", {
+        x: 50,
+        y,
+        font: boldFont,
+        size: headerSize,
+        color: rgb(0, 0, 0),
+      });
+      y -= 30;
+
+      // Summary
+      if (document.analysis.summary) {
+        checkAndAddPage();
+        page.drawText("Summary:", { x: 50, y, font: boldFont, size: fontSize, color: rgb(0, 0, 0) });
+        y -= 20;
+
+        const summaryLines = document.analysis.summary.split("\n");
+        for (const line of summaryLines) {
+          if (line.trim()) {
+            checkAndAddPage();
+            page.drawText(line.trim(), { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+            y -= 16;
+          }
+        }
+        y -= 10;
+      }
+
+      // Key Points
+      if (document.analysis.keyPoints && document.analysis.keyPoints.length > 0) {
+        checkAndAddPage();
+        page.drawText("Key Points:", { x: 50, y, font: boldFont, size: fontSize, color: rgb(0, 0, 0) });
+        y -= 20;
+
+        for (const point of document.analysis.keyPoints) {
+          checkAndAddPage();
+          page.drawText(`• ${point}`, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+          y -= 16;
+        }
+        y -= 10;
+      }
+
+      // Extracted Text
+      if (document.analysis.extractedText) {
+        checkAndAddPage();
+        page.drawText("Extracted Text:", { x: 50, y, font: boldFont, size: fontSize, color: rgb(0, 0, 0) });
+        y -= 20;
+
+        const textLines = document.analysis.extractedText.split("\n");
+        for (const line of textLines) {
+          if (line.trim()) {
+            checkAndAddPage();
+            // Wrap long lines
+            const maxLineLength = 80;
+            if (line.length > maxLineLength) {
+              const words = line.split(" ");
+              let currentLine = "";
+              for (const word of words) {
+                if ((currentLine + word).length > maxLineLength) {
+                  if (currentLine) {
+                    page.drawText(currentLine.trim(), { x: 60, y, font, size: fontSize - 1, color: rgb(0.2, 0.2, 0.2) });
+                    y -= 14;
+                    checkAndAddPage();
+                  }
+                  currentLine = word + " ";
+                } else {
+                  currentLine += word + " ";
+                }
+              }
+              if (currentLine) {
+                page.drawText(currentLine.trim(), { x: 60, y, font, size: fontSize - 1, color: rgb(0.2, 0.2, 0.2) });
+                y -= 14;
+              }
+            } else {
+              page.drawText(line.trim(), { x: 60, y, font, size: fontSize - 1, color: rgb(0.2, 0.2, 0.2) });
+              y -= 14;
+            }
+          }
+        }
+      }
+    } else {
+      checkAndAddPage();
+      page.drawText("No AI analysis available for this document.", {
+        x: 50,
+        y,
+        font,
+        size: fontSize,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      y -= 20;
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    const archiveFilename = `archive-${document.id}-${Date.now()}.pdf`;
+    const archivePath = path.join(archivesDir, archiveFilename);
+
+    await fs.writeFile(archivePath, pdfBytes);
+
+    // Update session data
+    const archiveInfo = {
+      path: archivePath,
+      filename: archiveFilename,
+      archivedAt: new Date().toISOString(),
+    };
+    sessionManager.addArchiveToDocument(sessionId, documentId, archiveInfo);
+
+    console.log(`✅ Document archived successfully: ${archiveFilename}`);
+    res.json({
+      message: "Document archived successfully",
+      archiveInfo,
+    });
+  } catch (error) {
+    console.error("❌ Error archiving document:", error);
+    res.status(500).json({ error: "Failed to archive document", details: error.message });
+  }
+});
+
+// Serve static files from the uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/archives", express.static(path.join(__dirname, "archives"))); // Serve archived files
 
 // Error handling middleware
 app.use((error, req, res, next) => {
