@@ -382,21 +382,25 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
 
     console.log("📤 Server: Sending complete response to client");
     console.log(`🎯 Server: Processing summary - Method: ${processingMethod}, Text: ${documentText.length} chars, Actions: ${analysis?.suggestedActions?.length || 0}`);
-    sendStatusUpdate(sessionId, "processing_complete", `Processing complete! Found ${analysis?.suggestedActions?.length || 0} suggested actions`, 100);
 
-    // Close SSE connection after a brief delay
+    // Send final completion status with longer delay to ensure client receives it
     setTimeout(() => {
-      if (global.sseConnections && global.sseConnections.has(sessionId)) {
-        try {
-          const sseRes = global.sseConnections.get(sessionId);
-          sseRes.write(`data: ${JSON.stringify({ type: "complete", message: "Processing finished" })}\n\n`);
-          sseRes.end();
-        } catch (error) {
-          console.error("Error closing SSE connection:", error.message);
+      sendStatusUpdate(sessionId, "processing_complete", `Processing complete! Found ${analysis?.suggestedActions?.length || 0} suggested actions`, 100);
+
+      // Close SSE connection after ensuring completion message is sent
+      setTimeout(() => {
+        if (global.sseConnections && global.sseConnections.has(sessionId)) {
+          try {
+            const sseRes = global.sseConnections.get(sessionId);
+            console.log(`📡 SSE: Closing connection for ${sessionId} after processing completion`);
+            sseRes.end();
+          } catch (error) {
+            console.error("Error closing SSE connection:", error.message);
+          }
+          global.sseConnections.delete(sessionId);
         }
-        global.sseConnections.delete(sessionId);
-      }
-    }, 1000);
+      }, 2000); // Give client time to process the completion message
+    }, 500); // Brief delay to ensure document is saved first
 
     res.json(response);
   } catch (error) {

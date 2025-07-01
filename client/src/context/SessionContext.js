@@ -345,6 +345,13 @@ export function SessionProvider({ children }) {
           console.log("📡 [DEBUG] Setting new stage:", newStage);
           console.log("📡 [DEBUG] Status type matched:", statusData.type);
 
+          // Force React to process this state update immediately to prevent batching issues
+          if (newStage) {
+            setTimeout(() => {
+              console.log("📡 [DEBUG] Confirming stage was set:", newStage);
+            }, 100);
+          }
+
           // Update progress if provided
           if (statusData.progress !== null && statusData.progress !== undefined) {
             console.log("📡 [DEBUG] Setting progress:", statusData.progress);

@@ -21,8 +21,10 @@ const HomePage = () => {
   useEffect(() => {
     if (processingStage) {
       console.log("🎯 [DEBUG] HomePage received processing stage:", processingStage);
+      console.log("🎯 [DEBUG] isProcessing state:", isProcessing);
+      console.log("🎯 [DEBUG] processingDocument state:", processingDocument);
     }
-  }, [processingStage]);
+  }, [processingStage, isProcessing, processingDocument]);
 
   // Mobile responsive sizing for vortex animation
   useEffect(() => {
@@ -103,7 +105,7 @@ const HomePage = () => {
       const timer = setTimeout(() => {
         console.log("🚀 Navigating to session results...");
         navigate(`/session/${activeSession.id}`);
-      }, 1500); // Allows user to see completion status
+      }, 2500); // Increased delay to ensure status is fully displayed
 
       return () => clearTimeout(timer);
     }
