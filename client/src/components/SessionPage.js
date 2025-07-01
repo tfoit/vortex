@@ -30,7 +30,7 @@ const RiskAssessmentDisplay = ({ riskAssessment }) => {
             <p className="text-on-surface-secondary">Factors:</p>
             <ul className="list-disc list-inside ml-2 text-on-surface-secondary">
               {riskAssessment.factors.map((factor, index) => (
-                <li key={index}>{factor}</li>
+                <li key={`risk-factor-${index}`}>{factor}</li>
               ))}
             </ul>
           </div>
@@ -115,7 +115,7 @@ const ClientInformation = ({ clientData }) => {
           </h4>
           <div className="space-y-2">
             {clientData.accounts.slice(0, 3).map((account, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+              <div key={`account-${account.accountNumber || index}`} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
                 <div>
                   <span className="font-medium capitalize">{account.type}</span>
                   <span className="text-on-surface-secondary ml-2">••••{account.accountNumber.slice(-4)}</span>
@@ -475,7 +475,9 @@ const SessionPage = () => {
             </div>
             <div className="space-y-4">
               {currentSession.suggestedActions?.length > 0 ? (
-                currentSession.suggestedActions.map((action, index) => <ActionItem key={action.id} action={action} index={index} isExecuting={executingActions.has(action.id)} isCompleted={currentSession.actionResults?.[action.id]} onExecute={() => handleExecuteAction(action)} />)
+                currentSession.suggestedActions.map((action, index) => (
+                  <ActionItem key={action.id || `action-${index}`} action={action} index={index} isExecuting={executingActions.has(action.id)} isCompleted={currentSession.actionResults?.[action.id]} onExecute={() => handleExecuteAction(action)} />
+                ))
               ) : (
                 <p className="text-on-surface-secondary">No advised actions available.</p>
               )}
@@ -497,7 +499,7 @@ const AnalysisSection = ({ title, content, items, type, children }) => {
       {items && (
         <ul className="space-y-2">
           {items.map((item, index) => (
-            <li key={index} className="flex items-start text-sm">
+            <li key={`${type || "item"}-${index}`} className="flex items-start text-sm">
               {type === "compliance" ? <AlertTriangle className="w-4 h-4 text-yellow-400 mr-3 mt-0.5 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 text-primary mr-3 mt-0.5 flex-shrink-0" />}
               <span className="text-on-surface-secondary">{item}</span>
             </li>
