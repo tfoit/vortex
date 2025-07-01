@@ -6,7 +6,7 @@ A comprehensive Proof of Concept (POC) for an office agent that assists client a
 
 - **VORTEX Animation PWA**: Beautiful animated interface with Progressive Web App capabilities
 - **Document Upload**: Drag-and-drop interface for uploading advisory minutes (PDF, DOC, Images)
-- **Camera Capture**: Built-in camera functionality for capturing handwritten notes with OCR
+- **Camera Capture**: Built-in camera functionality for capturing handwritten notes with vision processing
 - **AI Analysis**: OpenAI GPT-4o integration for intelligent document analysis
 - **Smart Actions**: Automated suggestions for compliance forms, client notes, and follow-ups
 - **Session Management**: UUID-based session tracking with sub-sessions for each action
@@ -29,7 +29,7 @@ A comprehensive Proof of Concept (POC) for an office agent that assists client a
 
 - Express.js REST API
 - OpenAI GPT-4o integration
-- Document processing with OCR (Tesseract.js)
+- Document processing with vision models
 - PDF parsing and image optimization
 - Mock banking service simulation
 - UUID-based session management
@@ -38,7 +38,7 @@ A comprehensive Proof of Concept (POC) for an office agent that assists client a
 ### Key Services
 
 - **Session Manager**: Handles UUID generation and session lifecycle
-- **Document Processor**: OCR, PDF parsing, and text extraction
+- **Document Processor**: Vision processing, PDF parsing, and text extraction
 - **AI Service**: OpenAI integration for document analysis
 - **Mock Banking Service**: Simulates bank backend systems
 
@@ -115,7 +115,7 @@ Document Upload/Capture
 
 ### Supported File Types
 
-- **Images**: JPEG, PNG (with OCR processing)
+- **Images**: JPEG, PNG (with vision processing)
 - **Documents**: PDF, DOC, DOCX
 - **Camera**: Real-time capture with optimization
 
@@ -339,7 +339,7 @@ MIT License - This is a proof of concept for demonstration purposes.
 ## 🔮 Future Enhancements
 
 - Multi-language support
-- Advanced OCR with handwriting recognition
+- Advanced vision processing with handwriting recognition
 - Integration with real banking APIs
 - Machine learning model training
 - Advanced analytics and reporting

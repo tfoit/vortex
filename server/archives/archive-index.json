@@ -1,0 +1,27 @@
+{
+  "4d79c67a-c979-447f-a93b-c6285232200d": {
+    "archiveId": "4d79c67a-c979-447f-a93b-c6285232200d",
+    "originalFilename": "document-1751106932125-943705462.jpg",
+    "pdfFilename": "document-1751106932125-943705462_2025-07-01T06-09-25-025Z.pdf",
+    "pdfPath": "C:\\Projects\\Vortex\\server\\archives\\document-1751106932125-943705462_2025-07-01T06-09-25-025Z.pdf",
+    "sessionId": "95369cdb-857b-4ff6-8269-963ce3d8f851",
+    "documentId": "6ce6187c-5913-4cec-90c3-94bec5275dc7",
+    "clientAdvisorId": "demo_advisor",
+    "documentType": "Handwritten Advisory Notes",
+    "archivedAt": "2025-07-01T06:09:25.576Z",
+    "fileSize": 2291143,
+    "extractedText": "The document is a handwritten note from a financial advisor to a client named John Smith. The note outlines the client's intention to open a pension fund and invest the maximum amount possible in 2025. The advisor suggests creating a pension account and a self-keeping account with investment in the MIXTA fund.",
+    "summary": "The document outlines a client's intention to open a pension fund and invest in a specific fund in 2025, with the advisor's suggested actions to create the necessary accounts.",
+    "archiveLocation": "archive://4d79c67a-c979-447f-a93b-c6285232200d",
+    "status": "archived",
+    "retention": {
+      "retentionPeriod": "7 years",
+      "deleteAfter": "2032-06-29T06:09:25.576Z"
+    },
+    "compliance": {
+      "gdprCompliant": true,
+      "encryptionLevel": "AES-256",
+      "accessLevel": "confidential"
+    }
+  }
+}

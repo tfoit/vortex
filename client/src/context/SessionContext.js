@@ -13,6 +13,10 @@ const SESSION_ACTIONS = {
   UPDATE_ACTION_STATUS: "UPDATE_ACTION_STATUS",
   CLEAR_SESSION: "CLEAR_SESSION",
   SET_SESSIONS_LIST: "SET_SESSIONS_LIST",
+  SET_PROCESSING_DOCUMENT: "SET_PROCESSING_DOCUMENT",
+  SET_UPLOAD_PROGRESS: "SET_UPLOAD_PROGRESS",
+  SET_PROCESSING_STAGE: "SET_PROCESSING_STAGE",
+  SET_PROCESSING_DETAILS: "SET_PROCESSING_DETAILS",
 };
 
 // Initial state
@@ -23,6 +27,8 @@ const initialState = {
   error: null,
   processingDocument: false,
   uploadProgress: 0,
+  processingStage: "",
+  processingDetails: null,
 };
 
 // Reducer
@@ -99,6 +105,30 @@ function sessionReducer(state, action) {
         sessions: action.payload,
       };
 
+    case SESSION_ACTIONS.SET_PROCESSING_DOCUMENT:
+      return {
+        ...state,
+        processingDocument: action.payload,
+      };
+
+    case SESSION_ACTIONS.SET_UPLOAD_PROGRESS:
+      return {
+        ...state,
+        uploadProgress: action.payload,
+      };
+
+    case SESSION_ACTIONS.SET_PROCESSING_STAGE:
+      return {
+        ...state,
+        processingStage: action.payload,
+      };
+
+    case SESSION_ACTIONS.SET_PROCESSING_DETAILS:
+      return {
+        ...state,
+        processingDetails: action.payload,
+      };
+
     default:
       return state;
   }
@@ -114,6 +144,22 @@ export function SessionProvider({ children }) {
 
   const setError = useCallback((error) => {
     dispatch({ type: SESSION_ACTIONS.SET_ERROR, payload: error });
+  }, []);
+
+  const setProcessingDocument = useCallback((processing) => {
+    dispatch({ type: SESSION_ACTIONS.SET_PROCESSING_DOCUMENT, payload: processing });
+  }, []);
+
+  const setUploadProgress = useCallback((progress) => {
+    dispatch({ type: SESSION_ACTIONS.SET_UPLOAD_PROGRESS, payload: progress });
+  }, []);
+
+  const setProcessingStage = useCallback((stage) => {
+    dispatch({ type: SESSION_ACTIONS.SET_PROCESSING_STAGE, payload: stage });
+  }, []);
+
+  const setProcessingDetails = useCallback((details) => {
+    dispatch({ type: SESSION_ACTIONS.SET_PROCESSING_DETAILS, payload: details });
   }, []);
 
   const loadSession = useCallback(
@@ -207,10 +253,82 @@ export function SessionProvider({ children }) {
 
       try {
         setLoading(true);
+        setProcessingDocument(true);
+        setUploadProgress(0);
+        setProcessingStage("Initializing...");
+        setProcessingDetails(null);
         console.log("📤 Starting automated document upload and processing...");
 
-        // Upload and get complete analysis in one step
-        const result = await apiService.uploadDocument(targetSessionId, file, onProgress);
+        // Enhanced progress tracking that updates both local progress and vortex animation
+        const enhancedProgressCallback = (progress) => {
+          setUploadProgress(progress);
+          if (onProgress) {
+            onProgress(progress);
+          }
+        };
+
+        // SSE status update callback for real-time processing feedback
+        const statusUpdateCallback = (statusData) => {
+          console.log("📡 Received status update:", statusData);
+
+          // Update processing stage based on status type
+          switch (statusData.type) {
+            case "upload_start":
+              setProcessingStage("Document upload started");
+              break;
+            case "session_validated":
+              setProcessingStage("Session validated");
+              break;
+            case "processing_start":
+              setProcessingStage("Starting document processing");
+              break;
+            case "vision_start":
+              setProcessingStage("Image detected - starting vision processing");
+              break;
+            case "vision_processing":
+              setProcessingStage("Processing with AI vision model...");
+              break;
+            case "vision_complete":
+              setProcessingStage("Vision processing completed");
+              break;
+            case "text_extraction_start":
+              setProcessingStage("Extracting text from document");
+              break;
+            case "text_extraction_complete":
+              setProcessingStage("Text extraction completed");
+              break;
+            case "ai_analysis_start":
+              setProcessingStage("Running AI analysis...");
+              break;
+            case "ai_analysis_complete":
+              setProcessingStage("AI analysis completed");
+              break;
+            case "saving_document":
+              setProcessingStage("Saving document to session");
+              break;
+            case "processing_complete":
+              setProcessingStage("Processing complete!");
+              break;
+            case "error":
+              setProcessingStage(`Error: ${statusData.message}`);
+              break;
+            default:
+              if (statusData.message) {
+                setProcessingStage(statusData.message);
+              }
+          }
+
+          // Update progress if provided
+          if (statusData.progress !== null && statusData.progress !== undefined) {
+            setUploadProgress(statusData.progress);
+          }
+
+          // Store detailed status info
+          setProcessingDetails(statusData);
+        };
+
+        // Upload and get complete analysis in one step with SSE status updates
+        const result = await apiService.uploadDocument(targetSessionId, file, enhancedProgressCallback, statusUpdateCallback);
         console.log("✅ Document upload completed with analysis:", result);
 
         // Reload session to get the updated data with analysis
@@ -224,12 +342,20 @@ export function SessionProvider({ children }) {
         };
       } catch (error) {
         setError(error.message);
+        setProcessingStage(`Error: ${error.message}`);
         throw error;
       } finally {
         setLoading(false);
+        setProcessingDocument(false);
+        // Don't reset progress and stage immediately to show completion state
+        setTimeout(() => {
+          setUploadProgress(0);
+          setProcessingStage("");
+          setProcessingDetails(null);
+        }, 3000);
       }
     },
-    [state.currentSession?.id, loadSession, setLoading, setError]
+    [state.currentSession?.id, loadSession, setLoading, setError, setProcessingDocument, setUploadProgress, setProcessingStage, setProcessingDetails]
   );
 
   const analyzeDocument = useCallback(
@@ -274,6 +400,7 @@ export function SessionProvider({ children }) {
 
       try {
         setLoading(true);
+        setProcessingDocument(true);
 
         const result = await apiService.processImageCapture(state.currentSession.id, imageData);
 
@@ -286,9 +413,10 @@ export function SessionProvider({ children }) {
         throw error;
       } finally {
         setLoading(false);
+        setProcessingDocument(false);
       }
     },
-    [state.currentSession, loadSession, setLoading, setError]
+    [state.currentSession, loadSession, setLoading, setError, setProcessingDocument]
   );
 
   const executeAction = useCallback(
@@ -358,8 +486,12 @@ export function SessionProvider({ children }) {
       clearSession,
       clearError,
       setError,
+      setProcessingDocument,
+      setUploadProgress,
+      setProcessingStage,
+      setProcessingDetails,
     }),
-    [state, createSession, loadSession, loadSessions, uploadDocument, analyzeDocument, analyzeDocumentWithVision, processImageCapture, executeAction, clearSession, clearError, setError]
+    [state, createSession, loadSession, loadSessions, uploadDocument, analyzeDocument, analyzeDocumentWithVision, processImageCapture, executeAction, clearSession, clearError, setError, setProcessingDocument, setUploadProgress, setProcessingStage, setProcessingDetails]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

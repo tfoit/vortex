@@ -6,13 +6,11 @@ import DashboardPage from "./components/DashboardPage";
 import { SessionProvider } from "./context/SessionContext";
 import { apiService } from "./services/apiService";
 import "./App.css";
-import VortexAnimation from "./components/VortexAnimation";
 
-function App() {
+// Main app component
+function MainApp() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [appError, setAppError] = useState(null);
-  const [processing, setProcessing] = useState(false);
-  const [vortexState, setVortexState] = useState("calm");
 
   useEffect(() => {
     // Handle online/offline status
@@ -63,69 +61,28 @@ function App() {
   }
 
   return (
-    <SessionProvider>
-      <Router>
-        <div className="App">
-          <div style={{ display: "flex", justifyContent: "center", gap: 12, margin: "24px auto 12px" }}>
-            <button
-              onClick={() => setVortexState("calm")}
-              style={{
-                padding: "8px 20px",
-                fontSize: "1rem",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-                background: vortexState === "calm" ? "#B5B8B1" : "#f5f5f5",
-                color: vortexState === "calm" ? "white" : "#222",
-                cursor: "pointer",
-                transition: "background 0.2s, color 0.2s",
-              }}
-            >
-              Calm
-            </button>
-            <button
-              onClick={() => setVortexState("processing")}
-              style={{
-                padding: "8px 20px",
-                fontSize: "1rem",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-                background: vortexState === "processing" ? "#E60000" : "#f5f5f5",
-                color: vortexState === "processing" ? "white" : "#222",
-                cursor: "pointer",
-                transition: "background 0.2s, color 0.2s",
-              }}
-            >
-              Processing
-            </button>
-            <button
-              onClick={() => setVortexState("awaiting")}
-              style={{
-                padding: "8px 20px",
-                fontSize: "1rem",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-                background: vortexState === "awaiting" ? "#FFD700" : "#f5f5f5",
-                color: vortexState === "awaiting" ? "#222" : "#222",
-                cursor: "pointer",
-                transition: "background 0.2s, color 0.2s",
-              }}
-            >
-              Awaiting
-            </button>
-          </div>
-          <VortexAnimation width={640} height={640} state={vortexState} />
-          {!isOnline && <div className="bg-yellow-500 text-white px-4 py-2 text-center">⚠️ You're offline. Some features may not be available.</div>}
+    <Router>
+      <div className="App">
+        {!isOnline && <div className="bg-yellow-500 text-white px-4 py-2 text-center">⚠️ You're offline. Some features may not be available.</div>}
 
-          <main>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/session/:sessionId" element={<SessionPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        </div>
-      </Router>
+        <main>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/session/:sessionId" element={<SessionPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  );
+}
+
+// App wrapper with SessionProvider
+function App() {
+  return (
+    <SessionProvider>
+      <MainApp />
     </SessionProvider>
   );
 }

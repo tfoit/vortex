@@ -26,7 +26,13 @@ class AIService {
     // This function will now prefer local analysis for text, but vision is handled elsewhere
     try {
       console.log("🤖 AI Service: Analyzing document text with local model...");
+
+      if (!this.ollamaService) {
+        throw new Error("OllamaService is not available in AI Service");
+      }
+
       const analysis = await this.ollamaService.analyzeDocument(documentText, "advisory_minutes");
+
       if (analysis && analysis.suggestedActions) {
         analysis.suggestedActions.forEach((action) => {
           action.id = this.generateActionId();
@@ -229,6 +235,11 @@ Note: This is an AI-generated summary. Please review and adjust as necessary.`;
       status: await this.getAIStatus(),
       message: "Provider switching disabled - using Ollama only",
     };
+  }
+
+  generateActionId() {
+    // Generate a unique ID for suggested actions
+    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
   }
 }
 

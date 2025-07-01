@@ -1,17 +1,11 @@
 const fs = require("fs").promises;
 const path = require("path");
-const Tesseract = require("tesseract.js");
 const pdf = require("pdf-parse");
 
 class DocumentProcessor {
-  constructor(aiService) {
-    this.aiService = aiService;
+  constructor() {
+    this.aiService = null;
     console.log("📄 DocumentProcessor initialized");
-    if (this.aiService) {
-      console.log("🔗 DocumentProcessor connected to AI service");
-    } else {
-      console.warn("⚠️ DocumentProcessor initialized WITHOUT AI service");
-    }
     this.supportedTypes = {
       "image/jpeg": "image",
       "image/png": "image",
@@ -19,6 +13,16 @@ class DocumentProcessor {
       "application/pdf": "pdf",
       "text/plain": "text",
     };
+  }
+
+  setOllamaService(ollamaService) {
+    this.ollamaService = ollamaService;
+    console.log("🔗 DocumentProcessor connected to Ollama service");
+  }
+
+  setAIService(aiService) {
+    this.aiService = aiService;
+    console.log("🔗 DocumentProcessor connected to AI service");
   }
 
   isImageType(mimeType) {
@@ -29,7 +33,8 @@ class DocumentProcessor {
     console.log(`- DocumentProcessor: Processing ${path.basename(filePath)} (${mimeType})`);
     switch (this.supportedTypes[mimeType]) {
       case "image":
-        return this.processImage(filePath);
+        // Images are now only processed with vision models
+        throw new Error("Images should be processed with vision models only. Use getImageAnalysis() instead.");
       case "pdf":
         return this.processPdf(filePath);
       case "text":
@@ -44,28 +49,9 @@ class DocumentProcessor {
     if (!this.aiService) {
       throw new Error("AI service is not connected to DocumentProcessor");
     }
-    // This now correctly calls the AI service's vision capability
+    console.log(`👁️ DocumentProcessor: Processing image with vision model: ${path.basename(imagePath)}`);
+    // This calls the AI service's vision capability
     return this.aiService.analyzeDocumentWithVision(imagePath, documentType);
-  }
-
-  async processImage(imagePath) {
-    try {
-      console.log(`- DocumentProcessor: Extracting text from image: ${path.basename(imagePath)}`);
-      const {
-        data: { text },
-      } = await Tesseract.recognize(imagePath, "eng", {
-        logger: (m) => {
-          if (m.status === "recognizing text") {
-            process.stdout.write(`\rOCR Progress: ${Math.round(m.progress * 100)}%`);
-          }
-        },
-      });
-      process.stdout.write("\rOCR Progress: 100%\n");
-      return this.cleanExtractedText(text);
-    } catch (error) {
-      console.error("- DocumentProcessor: Error processing image with Tesseract:", error);
-      throw new Error(`Failed to process image: ${error.message}`);
-    }
   }
 
   async processPdf(filePath) {

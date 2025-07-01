@@ -21,12 +21,15 @@ const aiService = new AIService();
 const documentProcessor = new DocumentProcessor();
 const bankingService = new MockBankingService();
 
-// Connect services - DocumentProcessor needs access to Ollama for vision
+// Connect services - DocumentProcessor needs access to AI service for vision
 setTimeout(() => {
   // Wait for AI service to initialize, then connect to document processor
-  if (aiService.ollama) {
-    documentProcessor.setOllamaService(aiService.ollama);
-    console.log("🔗 Connected DocumentProcessor to Ollama service for vision capabilities");
+  documentProcessor.setAIService(aiService);
+  if (aiService.ollamaService) {
+    documentProcessor.setOllamaService(aiService.ollamaService);
+    console.log("🔗 Connected DocumentProcessor to AI service and Ollama service for vision capabilities");
+  } else {
+    console.log("🔗 Connected DocumentProcessor to AI service");
   }
 }, 1000);
 
@@ -206,6 +209,55 @@ app.get("/api/sessions/:sessionId", async (req, res) => {
   }
 });
 
+// SSE endpoint for processing status updates
+app.get("/api/sessions/:sessionId/status", (req, res) => {
+  const { sessionId } = req.params;
+
+  // Set up SSE headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Cache-Control",
+  });
+
+  // Store the response object for this session
+  if (!global.sseConnections) {
+    global.sseConnections = new Map();
+  }
+  global.sseConnections.set(sessionId, res);
+
+  // Send initial connection confirmation
+  res.write(`data: ${JSON.stringify({ type: "connected", message: "Status stream connected" })}\n\n`);
+
+  // Handle client disconnect
+  req.on("close", () => {
+    global.sseConnections.delete(sessionId);
+  });
+});
+
+// Helper function to send status updates
+function sendStatusUpdate(sessionId, type, message, progress = null) {
+  if (global.sseConnections && global.sseConnections.has(sessionId)) {
+    const data = {
+      type,
+      message,
+      timestamp: new Date().toISOString(),
+      ...(progress !== null && { progress }),
+    };
+
+    const res = global.sseConnections.get(sessionId);
+    try {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      console.log(`📡 SSE: Sent status to ${sessionId}: ${message}`);
+    } catch (error) {
+      console.error(`❌ SSE: Failed to send status to ${sessionId}:`, error.message);
+      global.sseConnections.delete(sessionId);
+    }
+  }
+}
+
 // Upload and process document
 app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (req, res) => {
   try {
@@ -223,23 +275,30 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
     console.log(`📁 Session ID: ${sessionId}`);
     console.log(`📄 File: ${file?.originalname} (${file?.size} bytes, ${file?.mimetype})`);
 
+    // Send initial status update
+    sendStatusUpdate(sessionId, "upload_start", "Document upload started", 10);
+
     if (!file) {
       console.log("❌ Server: No file uploaded");
       console.log("📋 Request body keys:", Object.keys(req.body));
       console.log("📋 Request files:", req.files);
+      sendStatusUpdate(sessionId, "error", "No file uploaded");
       return res.status(400).json({ error: "No file uploaded" });
     }
 
     const session = sessionManager.getSession(sessionId);
     if (!session) {
       console.log(`❌ Server: Session ${sessionId} not found`);
+      sendStatusUpdate(sessionId, "error", "Session not found");
       return res.status(404).json({ error: "Session not found" });
     }
 
     console.log("✅ Server: Session found, processing document...");
+    sendStatusUpdate(sessionId, "session_validated", "Session validated, starting document processing", 20);
 
     // Intelligent document processing pipeline
     console.log("🔄 Server: Starting intelligent document processing pipeline...");
+    sendStatusUpdate(sessionId, "processing_start", "Starting intelligent document processing pipeline", 25);
 
     let documentText = "";
     let analysis = null;
@@ -250,34 +309,35 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
 
     if (isImage) {
       console.log("📸 Server: Image detected - using vision-based processing");
+      sendStatusUpdate(sessionId, "vision_start", "Image detected - starting vision-based processing", 40);
       processingMethod = "vision";
 
-      try {
-        // Use vision model for comprehensive analysis (includes text extraction)
-        analysis = await documentProcessor.getImageAnalysis(file.path, "advisory_minutes");
-        documentText = analysis.extractedText || "";
-        console.log(`👁️ Server: Vision analysis completed - extracted ${documentText.length} characters`);
-      } catch (visionError) {
-        console.warn("⚠️ Server: Vision analysis failed, falling back to OCR:", visionError.message);
-        processingMethod = "ocr_fallback";
-        documentText = await documentProcessor.processDocument(file.path, file.mimetype);
-        console.log(`📝 Server: OCR fallback extracted ${documentText.length} characters`);
-      }
+      // Use vision model for comprehensive analysis (includes text extraction)
+      sendStatusUpdate(sessionId, "vision_processing", "Processing image with AI vision model...", 50);
+      analysis = await documentProcessor.getImageAnalysis(file.path, "advisory_minutes");
+      documentText = analysis.extractedText || "";
+      console.log(`👁️ Server: Vision analysis completed - extracted ${documentText.length} characters`);
+      sendStatusUpdate(sessionId, "vision_complete", `Vision analysis completed - extracted ${documentText.length} characters`, 70);
     } else {
-      console.log("📄 Server: Non-image document - using OCR processing");
-      processingMethod = "ocr";
+      console.log("📄 Server: Non-image document - using text extraction");
+      sendStatusUpdate(sessionId, "text_extraction_start", "Processing text document", 40);
+      processingMethod = "text_extraction";
       documentText = await documentProcessor.processDocument(file.path, file.mimetype);
-      console.log(`📝 Server: OCR extracted ${documentText.length} characters`);
+      console.log(`📝 Server: Text extraction completed - ${documentText.length} characters`);
+      sendStatusUpdate(sessionId, "text_extraction_complete", `Text extraction completed - ${documentText.length} characters`, 60);
     }
 
     // If we don't have analysis yet (non-image or vision failed), run AI analysis
     if (!analysis && documentText.length > 0) {
       console.log("🤖 Server: Running AI analysis on extracted text...");
+      sendStatusUpdate(sessionId, "ai_analysis_start", "Running AI analysis on extracted text...", 75);
       try {
         analysis = await aiService.analyzeAdvisoryMinutes(documentText);
         console.log("✅ Server: AI analysis completed");
+        sendStatusUpdate(sessionId, "ai_analysis_complete", `AI analysis completed with ${analysis?.suggestedActions?.length || 0} suggested actions`, 85);
       } catch (aiError) {
         console.error("❌ Server: AI analysis failed:", aiError.message);
+        sendStatusUpdate(sessionId, "ai_analysis_error", `AI analysis failed: ${aiError.message}`, 85);
         // Create minimal analysis structure
         analysis = {
           documentType: isImage ? "Image Document" : "Text Document",
@@ -299,6 +359,7 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
 
     // Add document to session with complete analysis
     console.log("💾 Server: Saving document with complete analysis to session...");
+    sendStatusUpdate(sessionId, "saving_document", "Saving document with analysis to session...", 90);
     const document = sessionManager.addDocument(sessionId, {
       filename: file.filename,
       path: file.path,
@@ -321,9 +382,40 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
 
     console.log("📤 Server: Sending complete response to client");
     console.log(`🎯 Server: Processing summary - Method: ${processingMethod}, Text: ${documentText.length} chars, Actions: ${analysis?.suggestedActions?.length || 0}`);
+    sendStatusUpdate(sessionId, "processing_complete", `Processing complete! Found ${analysis?.suggestedActions?.length || 0} suggested actions`, 100);
+
+    // Close SSE connection after a brief delay
+    setTimeout(() => {
+      if (global.sseConnections && global.sseConnections.has(sessionId)) {
+        try {
+          const sseRes = global.sseConnections.get(sessionId);
+          sseRes.write(`data: ${JSON.stringify({ type: "complete", message: "Processing finished" })}\n\n`);
+          sseRes.end();
+        } catch (error) {
+          console.error("Error closing SSE connection:", error.message);
+        }
+        global.sseConnections.delete(sessionId);
+      }
+    }, 1000);
+
     res.json(response);
   } catch (error) {
     console.error("❌ Server: Error processing document upload:", error);
+    sendStatusUpdate(sessionId, "error", `Processing failed: ${error.message}`);
+
+    // Close SSE connection on error
+    setTimeout(() => {
+      if (global.sseConnections && global.sseConnections.has(sessionId)) {
+        try {
+          const sseRes = global.sseConnections.get(sessionId);
+          sseRes.end();
+        } catch (sseError) {
+          console.error("Error closing SSE connection on error:", sseError.message);
+        }
+        global.sseConnections.delete(sessionId);
+      }
+    }, 1000);
+
     res.status(500).json({ error: "Failed to process document" });
   }
 });
@@ -440,11 +532,10 @@ app.post("/api/sessions/:sessionId/capture", async (req, res) => {
 
     await fs.writeFile(filepath, base64Data, "base64");
 
-    // Process the image with OCR
-    const documentText = await documentProcessor.processImage(filepath);
-
-    // Analyze with AI
-    const analysis = await aiService.analyzeAdvisoryMinutes(documentText);
+    // Process the image with vision analysis
+    console.log("📸 Server: Processing camera capture with vision model");
+    const analysis = await documentProcessor.getImageAnalysis(filepath, "advisory_minutes");
+    const documentText = analysis.extractedText || "";
 
     // Update session
     sessionManager.addDocument(sessionId, {
@@ -453,6 +544,7 @@ app.post("/api/sessions/:sessionId/capture", async (req, res) => {
       mimetype: "image/png",
       text: documentText,
       analysis: analysis,
+      processingMethod: "vision",
       isCapture: true,
     });
 

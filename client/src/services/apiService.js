@@ -89,30 +89,76 @@ class ApiService {
     return response.data;
   }
 
+  // SSE connection for processing status updates
+  connectToProcessingStatus(sessionId, onStatusUpdate) {
+    const statusUrl = `${API_BASE_URL}/sessions/${sessionId}/status`;
+    console.log(`📡 Connecting to processing status stream: ${statusUrl}`);
+
+    const eventSource = new EventSource(statusUrl);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log(`📡 SSE Status Update:`, data);
+        if (onStatusUpdate) {
+          onStatusUpdate(data);
+        }
+      } catch (error) {
+        console.error("Error parsing SSE data:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      eventSource.close();
+    };
+
+    return eventSource;
+  }
+
   // Document processing
-  async uploadDocument(sessionId, file, onProgress) {
+  async uploadDocument(sessionId, file, onProgress, onStatusUpdate) {
     console.log(`📱 Mobile Upload: Starting upload for session ${sessionId}`);
     console.log(`📄 File details: ${file.name}, size: ${file.size}, type: ${file.type}`);
     console.log(`🌐 Upload URL: ${API_BASE_URL}/sessions/${sessionId}/upload`);
 
-    const formData = new FormData();
-    formData.append("document", file);
+    // Start SSE connection for detailed status updates
+    const eventSource = onStatusUpdate ? this.connectToProcessingStatus(sessionId, onStatusUpdate) : null;
 
-    const response = await this.client.post(`/sessions/${sessionId}/upload`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        console.log(`📊 Upload progress: ${percentCompleted}%`);
-        if (onProgress) {
-          onProgress(percentCompleted);
-        }
-      },
-    });
+    try {
+      const formData = new FormData();
+      formData.append("document", file);
 
-    console.log(`✅ Mobile Upload: Upload completed successfully`);
-    return response.data;
+      const response = await this.client.post(`/sessions/${sessionId}/upload`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          console.log(`📊 Upload progress: ${percentCompleted}%`);
+          if (onProgress) {
+            onProgress(percentCompleted);
+          }
+        },
+      });
+
+      console.log(`✅ Mobile Upload: Upload completed successfully`);
+
+      // Close SSE connection after a delay to ensure we get final updates
+      if (eventSource) {
+        setTimeout(() => {
+          eventSource.close();
+        }, 2000);
+      }
+
+      return response.data;
+    } catch (error) {
+      // Close SSE connection on error
+      if (eventSource) {
+        eventSource.close();
+      }
+      throw error;
+    }
   }
 
   async analyzeDocument(sessionId, documentId) {

@@ -23,7 +23,7 @@ async function testImageAnalysis() {
     const response = await axios.post(
       "http://127.0.0.1:11434/api/generate",
       {
-        model: "llava:latest",
+        model: "qwen2.5vl:latest",
         prompt: prompt,
         images: [base64Image],
         stream: false,

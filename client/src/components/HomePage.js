@@ -7,14 +7,33 @@ import VortexAnimation from "./VortexAnimation";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, createSession, clearSession, loadSessions } = useSession();
+  const { sessions, currentSession: activeSession, loadSession, uploadDocument, loading: isProcessing, processingDocument, uploadProgress, processingStage: contextProcessingStage, processingDetails, createSession, clearSession, loadSessions } = useSession();
 
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [processingStage, setProcessingStage] = useState("");
-  const [shouldNavigate, setShouldNavigate] = useState(false);
+  const [vortexSize, setVortexSize] = useState(320);
+
+  // Use processing stage from context
+  const processingStage = contextProcessingStage;
+
+  // Mobile responsive sizing for vortex animation
+  useEffect(() => {
+    const updateVortexSize = () => {
+      const screenWidth = window.innerWidth;
+      if (screenWidth < 480) {
+        setVortexSize(Math.min(280, screenWidth - 40));
+      } else if (screenWidth < 768) {
+        setVortexSize(320);
+      } else {
+        setVortexSize(400);
+      }
+    };
+
+    updateVortexSize();
+    window.addEventListener("resize", updateVortexSize);
+    return () => window.removeEventListener("resize", updateVortexSize);
+  }, []);
 
   // Memoize and sort sessions from newest to oldest
   const sortedSessions = useMemo(() => {
@@ -26,29 +45,59 @@ const HomePage = () => {
   }, [sessions]);
 
   const stageStatus = useMemo(() => {
-    const isInitializing = processingStage === "Initializing...";
-    const isCreatingSession = processingStage === "Creating session...";
-    const isAnalyzing = processingStage === "Analyzing with AI...";
-    const isComplete = processingStage === "Analysis complete!";
+    if (!processingStage) {
+      return {
+        sessionCreated: false,
+        visionCompleted: false,
+        aiCompleted: false,
+        reviewReady: false,
+      };
+    }
+
+    console.log("🔍 Current processing stage:", processingStage);
+
+    // Session setup is complete when we start processing or beyond
+    const isSessionCreated =
+      processingStage.includes("Session validated") ||
+      processingStage.includes("document processing") ||
+      processingStage.includes("vision") ||
+      processingStage.includes("text extraction") ||
+      processingStage.includes("AI analysis") ||
+      processingStage.includes("Saving document") ||
+      processingStage.includes("complete");
+
+    // Vision/text processing is complete when AI analysis starts or beyond
+    const isVisionCompleted = processingStage.includes("Vision processing completed") || processingStage.includes("Text extraction completed") || processingStage.includes("AI analysis") || processingStage.includes("Saving document") || processingStage.includes("complete");
+
+    // AI analysis is complete when saving starts or beyond
+    const isAICompleted = processingStage.includes("AI analysis completed") || processingStage.includes("Saving document") || processingStage.includes("Processing complete");
+
+    // Review is ready only when processing is completely finished
+    const isReviewReady = processingStage.includes("Processing complete!");
 
     return {
-      sessionCreated: !isInitializing && !isCreatingSession,
-      ocrCompleted: isAnalyzing || isComplete,
-      aiCompleted: isComplete,
-      reviewReady: uploadProgress === 100 && isComplete,
+      sessionCreated: isSessionCreated,
+      visionCompleted: isVisionCompleted,
+      aiCompleted: isAICompleted,
+      reviewReady: isReviewReady,
     };
-  }, [processingStage, uploadProgress]);
+  }, [processingStage]);
 
-  // Effect to handle navigation after upload completion
+  // Effect to handle navigation after processing is truly complete
   useEffect(() => {
-    if (shouldNavigate && activeSession?.id && activeSession.documents?.length > 0) {
+    // Only navigate when processing is completely finished, no errors, and we have results
+    if (processingStage === "Processing complete!" && !processingStage.includes("Error") && activeSession?.id && activeSession.documents?.length > 0) {
+      console.log("🎯 Processing complete detected, waiting 1.5s before navigation...");
+
+      // Wait a bit to let users see the completion status, then navigate
       const timer = setTimeout(() => {
+        console.log("🚀 Navigating to session results...");
         navigate(`/session/${activeSession.id}`);
-        setShouldNavigate(false);
-      }, 800);
+      }, 1500); // Allows user to see completion status
+
       return () => clearTimeout(timer);
     }
-  }, [shouldNavigate, activeSession, navigate]);
+  }, [processingStage, activeSession, navigate]);
 
   useEffect(() => {
     loadSessions();
@@ -83,29 +132,20 @@ const HomePage = () => {
 
   const handleDocumentUpload = async (file) => {
     try {
-      setUploadProgress(0);
-      setProcessingStage("Initializing...");
-
       // Always create a new session for each upload, as requested.
       console.log("📝 Creating new session for new upload...");
-      setProcessingStage("Creating session...");
       const newSession = await createSession();
       if (!newSession?.id) {
         throw new Error("Failed to create session.");
       }
       console.log("✅ Session created:", newSession.id);
-      setUploadProgress(15);
 
-      // Step 2: Intelligent Document Processing (Upload + OCR/Vision + AI Analysis)
-      setProcessingStage("Uploading & Processing with AI...");
+      // Step 2: Intelligent Document Processing (Upload + Vision + AI Analysis)
       console.log("🚀 Starting fully automated document processing pipeline...");
 
       const uploadResult = await uploadDocument(
         file,
-        (progress) => {
-          // Progress from 15% to 95% during the entire automated process
-          setUploadProgress(15 + progress * 0.8);
-        },
+        null, // Context handles progress now
         newSession.id
       );
 
@@ -113,7 +153,6 @@ const HomePage = () => {
 
       // Check if we got a full analysis
       if (uploadResult.analysis) {
-        setProcessingStage("Analysis complete - Client identification in progress...");
         console.log("🔍 Document analysis received, processing method:", uploadResult.processingMethod);
         console.log("📊 Analysis includes:", {
           hasText: !!uploadResult.analysis.extractedText,
@@ -122,23 +161,12 @@ const HomePage = () => {
         });
       } else {
         console.warn("⚠️ No analysis received from automated processing");
-        setProcessingStage("Processing completed - Limited analysis available");
       }
 
-      setUploadProgress(100);
-
-      // Trigger navigation after a short delay to show completion
-      setTimeout(() => setShouldNavigate(true), 1000);
+      // Navigation will be handled automatically when "Processing complete!" status is received
     } catch (error) {
       console.error("Failed to process document:", error);
-      setProcessingStage(`Processing failed: ${error.message}`);
-      setUploadProgress(0);
-
-      // Show error for a few seconds then reset
-      setTimeout(() => {
-        setProcessingStage("");
-        setUploadProgress(0);
-      }, 3000);
+      // Error handling is now managed by the context
     }
   };
 
@@ -158,10 +186,10 @@ const HomePage = () => {
     <div className="min-h-screen bg-white font-sans">
       {/* Header - UBS Style */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
             <div
-              className="flex items-center space-x-4 cursor-pointer hover:opacity-80 transition-opacity"
+              className="flex items-center space-x-2 sm:space-x-4 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={() => {
                 if (activeSession) {
                   // Clear session to return to main page
@@ -169,15 +197,15 @@ const HomePage = () => {
                 }
               }}
             >
-              <img src="/ubs-logo.png" alt="UBS" className="h-10 w-auto mr-3" />
-              <div className="text-lg font-light text-gray-900 tracking-wide">Vortex AI Agent</div>
+              <img src="/ubs-logo.png" alt="UBS" className="h-8 sm:h-10 w-auto mr-2 sm:mr-3" />
+              <div className="text-base sm:text-lg font-light text-gray-900 tracking-wide">Vortex AI Agent</div>
             </div>
-            <div className="flex items-center space-x-4">
-              <button onClick={() => navigate("/dashboard")} className="text-sm font-medium text-gray-600 hover:text-red-600 transition-colors">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <button onClick={() => navigate("/dashboard")} className="hidden sm:block text-sm font-medium text-gray-600 hover:text-red-600 transition-colors">
                 Dashboard
               </button>
-              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
-                <Menu className="h-5 w-5" />
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 sm:p-2.5 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
+                <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
           </div>
@@ -185,7 +213,7 @@ const HomePage = () => {
       </header>
 
       {/* Side Panel - UBS Corporate Style */}
-      <div className={`fixed top-0 right-0 h-full bg-white shadow-2xl z-30 transform transition-transform duration-300 ease-in-out ${isMenuOpen ? "translate-x-0" : "translate-x-full"}`} style={{ width: "380px" }}>
+      <div className={`fixed top-0 right-0 h-full bg-white shadow-2xl z-30 transform transition-transform duration-300 ease-in-out ${isMenuOpen ? "translate-x-0" : "translate-x-full"} w-full sm:w-80 max-w-sm`}>
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <h3 className="text-lg font-light text-gray-900">Dashboard</h3>
           <button onClick={() => setIsMenuOpen(false)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-gray-50 transition-all duration-200">
@@ -296,14 +324,15 @@ const HomePage = () => {
       </div>
       {isMenuOpen && <div onClick={() => setIsMenuOpen(false)} className="fixed inset-0 bg-black bg-opacity-20 z-20"></div>}
 
-      <main className="max-w-4xl mx-auto px-6 lg:px-8">
-        {isProcessing ? (
-          <div className="flex flex-col items-center justify-center min-h-[80vh]">
-            <div style={{ width: 640, height: 640 }}>
-              <VortexAnimation width={640} height={640} processing={true} />
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {isProcessing || processingDocument ? (
+          <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+            {/* Mobile-responsive vortex animation */}
+            <div className="w-full max-w-lg aspect-square flex items-center justify-center">
+              <VortexAnimation width={vortexSize} height={vortexSize} state="processing" />
             </div>
-            <div className="mt-8 text-center max-w-md">
-              <h2 className="text-2xl font-light text-gray-900 mb-4">Processing Document</h2>
+            <div className="mt-8 text-center max-w-md w-full px-4">
+              <h2 className="text-xl sm:text-2xl font-light text-gray-900 mb-4">Processing Document</h2>
 
               {/* Progress Bar */}
               <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
@@ -314,58 +343,73 @@ const HomePage = () => {
               <div className="text-sm text-gray-500 mb-2">{Math.round(uploadProgress)}% Complete</div>
 
               {/* Current Stage */}
-              <p className="text-gray-600 font-medium">{processingStage}</p>
+              <p className={`font-medium text-sm sm:text-base transition-colors duration-300 ${processingStage.includes("Processing complete!") ? "text-green-600" : processingStage.includes("Error") ? "text-red-600" : "text-gray-600"}`}>{processingStage}</p>
 
-              {/* Processing Steps */}
-              <div className="mt-6 space-y-2 text-sm text-gray-500">
-                <div className={`flex items-center justify-center space-x-2 ${stageStatus.sessionCreated ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${stageStatus.sessionCreated ? "bg-green-500" : "bg-gray-300"}`}></div>
-                  <span>Session Created</span>
+              {/* Show navigation hint when complete */}
+              {processingStage.includes("Processing complete!") && <p className="text-sm text-green-500 mt-2 animate-pulse">Redirecting to results in a moment...</p>}
+
+              {/* Enhanced Processing Steps */}
+              <div className="mt-6 space-y-3 text-sm">
+                <div className={`flex items-center justify-center space-x-3 transition-all duration-300 ${stageStatus.sessionCreated ? "text-green-600 font-medium" : "text-gray-500"}`}>
+                  {stageStatus.sessionCreated ? <CheckCircle className="w-4 h-4 text-green-500" /> : <div className="w-4 h-4 rounded-full bg-gray-300"></div>}
+                  <span>Document Upload & Session Setup</span>
                 </div>
-                <div className={`flex items-center justify-center space-x-2 ${stageStatus.ocrCompleted ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${stageStatus.ocrCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
-                  <span>OCR Complete</span>
+                <div className={`flex items-center justify-center space-x-3 transition-all duration-300 ${stageStatus.visionCompleted ? "text-green-600 font-medium" : "text-gray-500"}`}>
+                  {stageStatus.visionCompleted ? <CheckCircle className="w-4 h-4 text-green-500" /> : <div className="w-4 h-4 rounded-full bg-gray-300"></div>}
+                  <span>Vision/Text Processing</span>
                 </div>
-                <div className={`flex items-center justify-center space-x-2 ${stageStatus.aiCompleted ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${stageStatus.aiCompleted ? "bg-green-500" : "bg-gray-300"}`}></div>
-                  <span>AI Analysis Complete</span>
+                <div className={`flex items-center justify-center space-x-3 transition-all duration-300 ${stageStatus.aiCompleted ? "text-green-600 font-medium" : "text-gray-500"}`}>
+                  {stageStatus.aiCompleted ? <CheckCircle className="w-4 h-4 text-green-500" /> : <div className="w-4 h-4 rounded-full bg-gray-300"></div>}
+                  <span>AI Analysis & Insights</span>
                 </div>
-                <div className={`flex items-center justify-center space-x-2 ${stageStatus.reviewReady ? "text-green-600" : ""}`}>
-                  <div className={`w-2 h-2 rounded-full ${stageStatus.reviewReady ? "bg-green-500" : "bg-gray-300"}`}></div>
+                <div className={`flex items-center justify-center space-x-3 transition-all duration-300 ${stageStatus.reviewReady ? "text-green-600 font-medium" : "text-gray-500"}`}>
+                  {stageStatus.reviewReady ? <CheckCircle className="w-4 h-4 text-green-500" /> : <div className="w-4 h-4 rounded-full bg-gray-300"></div>}
                   <span>Ready for Review</span>
                 </div>
               </div>
+
+              {/* Detailed Processing Info */}
+              {processingDetails && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-400 mb-1">Processing Details</div>
+                  <div className="text-sm text-gray-600">
+                    <div>Type: {processingDetails.type}</div>
+                    {processingDetails.progress && <div>Progress: {processingDetails.progress}%</div>}
+                    <div className="text-xs text-gray-400 mt-1">{new Date(processingDetails.timestamp).toLocaleTimeString()}</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : !activeSession ? (
           <div className="flex flex-col items-center justify-center min-h-[80vh]">
             {/* Main Logo and CTA */}
-            <div className="text-center mb-12">
-              <div style={{ width: 640, height: 640 }}>
-                <VortexAnimation width={640} height={640} />
+            <div className="text-center mb-8 sm:mb-12">
+              <div className="flex justify-center">
+                <VortexAnimation width={vortexSize} height={vortexSize} />
               </div>
             </div>
 
             {/* Upload Area */}
             <div
-              className={`w-full max-w-2xl border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${isDragging ? "border-red-400 bg-red-50 scale-[1.02]" : "border-gray-200 hover:border-red-300 hover:bg-gray-50"} cursor-pointer`}
+              className={`w-full max-w-2xl border-2 border-dashed rounded-2xl p-6 sm:p-12 text-center transition-all duration-300 ${isDragging ? "border-red-400 bg-red-50 scale-[1.02]" : "border-gray-200 hover:border-red-300 hover:bg-gray-50"} cursor-pointer`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => document.getElementById("file-upload").click()}
             >
-              <div className="mb-6">
-                <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+              <div className="mb-4 sm:mb-6">
+                <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto" />
               </div>
-              <h3 className="text-xl font-light text-gray-900 mb-2">Upload Advisory Documents</h3>
-              <p className="text-gray-600 mb-6">Drag and drop files here, or click to browse</p>
-              <div className="flex justify-center space-x-4">
+              <h3 className="text-lg sm:text-xl font-light text-gray-900 mb-2">Upload Advisory Documents</h3>
+              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">Drag and drop files here, or click to browse</p>
+              <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     document.getElementById("file-upload").click();
                   }}
-                  className="inline-flex items-center px-6 py-3 border border-red-600 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-all duration-200"
+                  className="inline-flex items-center justify-center px-4 sm:px-6 py-3 border border-red-600 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-all duration-200 text-sm sm:text-base"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   Choose Files
@@ -375,7 +419,7 @@ const HomePage = () => {
                     e.stopPropagation();
                     setShowCamera(true);
                   }}
-                  className="inline-flex items-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all duration-200"
+                  className="inline-flex items-center justify-center px-4 sm:px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all duration-200 text-sm sm:text-base"
                 >
                   <Camera className="w-4 h-4 mr-2" />
                   Use Camera

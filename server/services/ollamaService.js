@@ -5,8 +5,8 @@ const path = require("path");
 class OllamaService {
   constructor() {
     this.baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    this.defaultModel = process.env.OLLAMA_MODEL || "llama3.2";
-    this.visionModel = process.env.OLLAMA_VISION_MODEL || "llava:latest";
+    this.defaultModel = process.env.OLLAMA_MODEL || "gemma3:27b-it-qat";
+    this.visionModel = process.env.OLLAMA_VISION_MODEL || "qwen2.5vl:latest";
     this.timeout = 120000; // 2 minutes for vision processing
 
     console.log(`🦙 Ollama service initialized with model: ${this.defaultModel}`);
@@ -243,11 +243,9 @@ Respond only with valid JSON. Do not include any other text or explanations.`;
       });
 
       console.log(`📥 Response status: ${response.status}`);
-      console.log(`📥 Response data:`, JSON.stringify(response.data, null, 2));
 
       const analysis = this.parseAnalysisResponse(response.data.response);
       console.log("✅ Ollama analysis completed successfully");
-      console.log(`📊 Analysis result:`, JSON.stringify(analysis, null, 2));
 
       return analysis;
     } catch (error) {
