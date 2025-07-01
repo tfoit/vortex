@@ -32,12 +32,12 @@ const PROCESSING = {
   BOND_COLOR: "rgba(230,1,0,0.22)",
   RED_BREATH_SPEED: [0.0015, 0.0025],
   RED_BREATH_AMP: 2.0,
-  PARTICLE_COUNT: 3000,
+  PARTICLE_COUNT: 5000,
   VORTEX_RADIUS: 180,
-  RADIUS_WAVE_AMP: 1.5,
-  RADIUS_WAVE_FREQ: 0.3,
+  RADIUS_WAVE_AMP: 0.001, // It's the amplitude of the wave. Lower is more subtle
+  RADIUS_WAVE_FREQ: 10000, // It's the frequency of the wave. Higher is more
   RIM_THICKNESS_MIN: 0.5,
-  RIM_THICKNESS_MAX: 1.25,
+  RIM_THICKNESS_MAX: 1.4,
 };
 const AWAITING = {
   ANGULAR_SPEED: 0.001,
@@ -46,17 +46,17 @@ const AWAITING = {
   OSC_AMP_MAX: 3,
   SPARK_PROBABILITY: 0.001,
   SPARK_LIMIT: 2,
-  RED_PARTICLE_RATIO: 0.1,
+  RED_PARTICLE_RATIO: 0.8,
   RED_BRIGHTNESS: 1,
   BOND_COLOR: "#0066b3", // blue cs
   RED_BREATH_SPEED: [0.001, 0.0025],
   RED_BREATH_AMP: 0.8,
-  PARTICLE_COUNT: 1700,
-  VORTEX_RADIUS: 169,
-  RADIUS_WAVE_AMP: 0.5,
-  RADIUS_WAVE_FREQ: 0.3,
+  PARTICLE_COUNT: 750,
+  VORTEX_RADIUS: 180,
+  RADIUS_WAVE_AMP: 0.0001, // It's the amplitude of the wave. Lower is more subtle
+  RADIUS_WAVE_FREQ: 10000, // It's the frequency of the wave. Higher is more
   RIM_THICKNESS_MIN: 0.5, // perfect ring
-  RIM_THICKNESS_MAX: 1.15, // perfect ring
+  RIM_THICKNESS_MAX: 1.4, // perfect ring
 };
 const PARTICLE_SIZE = 1.5;
 const RED_PARTICLE_RATIO = 0.3;
@@ -68,7 +68,7 @@ const BASE_PARTICLE_COLOR_CALM = "#B3B3B3"; // Calm, subtle grey with a hint of 
 const BASE_PARTICLE_COLOR_PROCESSING = "#000000";
 const ELECTRIC_PARTICLE_COLOR = "#E60000";
 const ELECTRIC_PARTICLE_RATIO = 0.2; // 20% become electric in processing
-const BASE_PARTICLE_COLOR_AWAITING = "#0066b3"; // blue
+const BASE_PARTICLE_COLOR_AWAITING = ""; // blue
 const ELECTRIC_PARTICLE_COLOR_AWAITING = "#FFEA70"; // light blue
 const RIM_ANIMATION_DURATION = 1500; // ms
 
@@ -179,7 +179,7 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
     }
     animateCount();
     return () => raf && cancelAnimationFrame(raf);
-  }, [targetCount, currentCount]);
+  }, [targetCount]);
 
   // Animate transition progress for color blending
   useEffect(() => {
