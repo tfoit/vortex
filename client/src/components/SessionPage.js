@@ -6,6 +6,7 @@ import { CheckCircle, AlertTriangle, ArrowLeft, Play, Loader2, Check, Eye, FileT
 import { useSession } from "../context/SessionContext";
 import VortexAnimation from "./VortexAnimation";
 import { clientIdentificationService } from "../services/clientIdentificationService";
+import { apiService } from "../services/apiService";
 
 // Safe component for rendering risk assessment
 const RiskAssessmentDisplay = ({ riskAssessment }) => {
@@ -48,7 +49,7 @@ const ClientInformation = ({ clientData }) => {
   if (!clientData) {
     return (
       <div className="text-center py-8">
-        <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <User className="w-12 h-12 text-on-surface-secondary/30 mx-auto mb-3" />
         <p className="text-on-surface-secondary">No client information available</p>
       </div>
     );
@@ -57,7 +58,7 @@ const ClientInformation = ({ clientData }) => {
   return (
     <div className="space-y-4">
       {/* Basic Info */}
-      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+      <div className="flex items-center space-x-3 p-3 bg-background rounded-lg">
         <User className="w-5 h-5 text-primary" />
         <div>
           <p className="font-semibold text-on-surface">{clientData.name}</p>
@@ -69,25 +70,25 @@ const ClientInformation = ({ clientData }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {clientData.email && (
           <div className="flex items-center space-x-2 text-sm">
-            <Mail className="w-4 h-4 text-gray-400" />
+            <Mail className="w-4 h-4 text-on-surface-secondary" />
             <span className="text-on-surface-secondary">{clientData.email}</span>
           </div>
         )}
         {clientData.phone && (
           <div className="flex items-center space-x-2 text-sm">
-            <Phone className="w-4 h-4 text-gray-400" />
+            <Phone className="w-4 h-4 text-on-surface-secondary" />
             <span className="text-on-surface-secondary">{clientData.phone}</span>
           </div>
         )}
         {clientData.birthdate && (
           <div className="flex items-center space-x-2 text-sm">
-            <Calendar className="w-4 h-4 text-gray-400" />
+            <Calendar className="w-4 h-4 text-on-surface-secondary" />
             <span className="text-on-surface-secondary">Born: {new Date(clientData.birthdate).toLocaleDateString()}</span>
           </div>
         )}
         {clientData.nationality && (
           <div className="flex items-center space-x-2 text-sm">
-            <Globe className="w-4 h-4 text-gray-400" />
+            <Globe className="w-4 h-4 text-on-surface-secondary" />
             <span className="text-on-surface-secondary">{clientData.nationality}</span>
           </div>
         )}
@@ -96,7 +97,7 @@ const ClientInformation = ({ clientData }) => {
       {/* Address */}
       {clientData.address && (
         <div className="flex items-start space-x-2 text-sm">
-          <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+          <MapPin className="w-4 h-4 text-on-surface-secondary mt-0.5" />
           <div className="text-on-surface-secondary">
             <p>{clientData.address.street}</p>
             <p>
@@ -115,7 +116,7 @@ const ClientInformation = ({ clientData }) => {
           </h4>
           <div className="space-y-2">
             {clientData.accounts.slice(0, 3).map((account, index) => (
-              <div key={`account-${account.accountNumber || index}`} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+              <div key={`account-${account.accountNumber || index}`} className="flex items-center justify-between p-2 bg-background rounded text-sm">
                 <div>
                   <span className="font-medium capitalize">{account.type}</span>
                   <span className="text-on-surface-secondary ml-2">••••{account.accountNumber.slice(-4)}</span>
@@ -135,7 +136,7 @@ const ClientInformation = ({ clientData }) => {
       {/* Risk Profile */}
       {clientData.riskProfile && (
         <div className="flex items-center space-x-2 text-sm">
-          <Building className="w-4 h-4 text-gray-400" />
+          <Building className="w-4 h-4 text-on-surface-secondary" />
           <span className="text-on-surface-secondary">Risk Profile: </span>
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -158,6 +159,9 @@ const SessionPage = () => {
   const [executingActions, setExecutingActions] = useState(new Set());
   const [visionAnalyzing, setVisionAnalyzing] = useState(false);
   const [clientData, setClientData] = useState(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState(null);
+  const [archiveSuccess, setArchiveSuccess] = useState(false);
 
   // Dynamic server URL for mobile compatibility
   const getServerUrl = useCallback(() => {
@@ -214,15 +218,25 @@ const SessionPage = () => {
   }, [sessionId, getSession]);
 
   const handleExecuteAction = async (action) => {
+    console.log(`🎯 UI: Starting execution of action ${action.id}`);
     setExecutingActions((prev) => new Set(prev.add(action.id)));
-    await executeAction(sessionId, action.id);
-    const updatedSession = await getSession(sessionId);
-    setCurrentSession(updatedSession);
-    setExecutingActions((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(action.id);
-      return newSet;
-    });
+
+    try {
+      const result = await executeAction(sessionId, action.id);
+      console.log(`✅ UI: Action execution completed:`, result);
+
+      const updatedSession = await getSession(sessionId);
+      console.log(`🔄 UI: Session reloaded, actionResults:`, updatedSession?.actionResults);
+      setCurrentSession(updatedSession);
+    } catch (error) {
+      console.error(`❌ UI: Action execution failed:`, error);
+    } finally {
+      setExecutingActions((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(action.id);
+        return newSet;
+      });
+    }
   };
 
   const handleVisionAnalysis = async () => {
@@ -237,6 +251,24 @@ const SessionPage = () => {
       console.error("Vision analysis failed:", error);
     } finally {
       setVisionAnalyzing(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!currentSession?.documents?.[0]) return;
+    setIsArchiving(true);
+    setArchiveError(null);
+    setArchiveSuccess(false);
+    try {
+      const documentId = currentSession.documents[0].id;
+      await apiService.archiveDocument(sessionId, documentId);
+      const updatedSession = await getSession(sessionId);
+      setCurrentSession(updatedSession);
+      setArchiveSuccess(true);
+    } catch (err) {
+      setArchiveError(err.message || "An unknown error occurred.");
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -288,10 +320,13 @@ const SessionPage = () => {
 
   if (!currentSession) return null;
 
+  const document = currentSession?.documents?.[0];
+  const analysis = document?.analysis;
+
   return (
     <main className="container">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <button onClick={() => navigate("/dashboard")} className="btn btn-secondary mb-4">
           <ArrowLeft className="w-4 h-4" />
           Back to Dashboard
@@ -300,95 +335,65 @@ const SessionPage = () => {
         <p className="text-on-surface-secondary">Session created on {new Date(currentSession.createdAt).toLocaleDateString()}</p>
       </motion.div>
 
-      <div className="grid lg:grid-cols-3 gap-6 mt-8">
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Left Column: Document Preview & Client Info */}
-        <div className="lg:col-span-1 space-y-6 order-2 lg:order-1">
-          {/* Document Preview */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Document Card */}
           <motion.div className="card" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
             <div className="card-header">
               <h2 className="card-title flex items-center gap-2">
                 <FileText className="w-5 h-5" />
-                Document Preview
+                Document
               </h2>
             </div>
-            <div className="space-y-4">
-              {/* Document Info */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-on-surface">{currentSession.documents?.[0]?.filename || "Unknown Document"}</h3>
-                <div className="flex items-center space-x-4 text-sm text-on-surface-secondary">
-                  <span>{currentSession.documents?.[0]?.size ? formatFileSize(currentSession.documents[0].size) : ""}</span>
-                  {currentSession.analysis?.documentType && (
-                    <>
-                      <span>•</span>
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">{currentSession.analysis.documentType}</span>
-                    </>
-                  )}
+            {document ? (
+              <>
+                {/* Document Info */}
+                <div className="space-y-2 mb-4">
+                  <h3 className="font-semibold text-on-surface">{document.filename}</h3>
+                  <div className="flex items-center space-x-4 text-sm text-on-surface-secondary">
+                    <span>{document.size ? formatFileSize(document.size) : ""}</span>
+                    {analysis?.documentType && (
+                      <>
+                        <span>•</span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">{analysis.documentType}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Document Preview */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center overflow-hidden">
-                {isImageDocument ? (
-                  <div className="w-full flex flex-col items-center">
-                    <img
-                      src={`${getServerUrl()}/uploads/${currentSession.documents[0].filename}`}
-                      alt="Document preview"
-                      className="max-w-full max-h-64 lg:max-h-80 rounded-lg shadow-sm object-contain"
-                      onLoad={(e) => {
-                        console.log("✅ Mobile: Image loaded successfully");
-                      }}
-                      onError={(e) => {
-                        console.error("❌ Mobile: Failed to load image:", e.target.src);
-                        e.target.style.display = "none";
-                        e.target.parentNode.querySelector(".fallback-message").style.display = "block";
-                      }}
-                    />
-                    {/* Fallback for failed image loads */}
-                    <div className="fallback-message text-center text-gray-500" style={{ display: "none" }}>
-                      <FileText className="w-12 h-12 mx-auto mb-2" />
-                      <p>Image preview unavailable</p>
-                      <p className="text-sm">Try refreshing the page</p>
-                      <p className="text-xs mt-2 text-gray-400">{currentSession.documents?.[0]?.filename}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-gray-500">
-                    <FileText className="w-12 h-12 mx-auto mb-2" />
-                    <p>No preview available</p>
-                    <p className="text-sm">{currentSession.documents?.[0]?.filename}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Vision Analysis Button for Images - Always available after upload */}
-              {isImageDocument && (
-                <button onClick={handleVisionAnalysis} disabled={visionAnalyzing} className="w-full btn btn-primary text-sm">
-                  {visionAnalyzing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Analyzing with Vision...
-                    </>
+                {/* Document Preview */}
+                <div className="p-4 border rounded-lg bg-background flex justify-center items-center h-64 mb-4">
+                  {isImageDocument ? (
+                    <img src={`${getServerUrl()}/uploads/${document.filename}`} alt="Document preview" className="max-w-full max-h-full object-contain" />
                   ) : (
-                    <>
-                      <Eye className="w-4 h-4" />
-                      {hasVisionAnalysis ? "Re-analyze with Vision AI" : "Enhance with Vision AI"}
-                    </>
+                    <div className="text-center text-on-surface-secondary">
+                      <FileText className="w-12 h-12 mx-auto mb-2" />
+                      <p>No preview available</p>
+                    </div>
                   )}
-                </button>
-              )}
-
-              {/* Mobile Debug Info */}
-              {isImageDocument && (
-                <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-100 rounded">
-                  <p>
-                    <strong>Debug Info:</strong>
-                  </p>
-                  <p>Server: {getServerUrl()}</p>
-                  <p>Image URL: {`${getServerUrl()}/uploads/${currentSession.documents?.[0]?.filename}`}</p>
-                  <p>Hostname: {window.location.hostname}</p>
                 </div>
-              )}
-            </div>
+
+                {/* Archive Button Section */}
+                <div className="mt-4">
+                  {document.archive ? (
+                    <a href={`${getServerUrl()}/archives/${document.archive.filename}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary w-full text-center">
+                      <Eye className="w-4 h-4" />
+                      View Archived PDF
+                    </a>
+                  ) : (
+                    <button onClick={handleArchive} disabled={isArchiving} className="btn btn-secondary w-full">
+                      {isArchiving ? <Loader2 className="animate-spin w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                      {isArchiving ? "Archiving..." : "Archive Document"}
+                    </button>
+                  )}
+                  {archiveError && <p className="text-red-500 text-sm mt-2 text-center">{archiveError}</p>}
+                  {archiveSuccess && <p className="text-green-600 text-sm mt-2 text-center">Document archived successfully!</p>}
+                </div>
+              </>
+            ) : (
+              <p className="text-on-surface-secondary">No document in this session.</p>
+            )}
           </motion.div>
 
           {/* Client Information */}
@@ -403,10 +408,10 @@ const SessionPage = () => {
               <ClientInformation clientData={clientData} />
             ) : (
               <div className="text-center py-6">
-                <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <User className="w-12 h-12 text-on-surface-secondary/30 mx-auto mb-3" />
                 <p className="text-on-surface-secondary mb-4">No client automatically identified</p>
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-500 mb-3">Please select the correct client:</p>
+                  <p className="text-sm text-on-surface-secondary mb-3">Please select the correct client:</p>
                   {clientIdentificationService.getAllClients().map((client) => (
                     <button
                       key={client.id}
@@ -414,7 +419,7 @@ const SessionPage = () => {
                         console.log(`👤 Manually selected client: ${client.name}`);
                         setClientData(client);
                       }}
-                      className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-primary hover:bg-gray-50 transition-colors"
+                      className="w-full p-3 text-left border border-border rounded-lg hover:border-border-hover hover:bg-background transition-colors"
                     >
                       <div className="font-medium text-on-surface">{client.name}</div>
                       <div className="text-sm text-on-surface-secondary">
@@ -428,59 +433,63 @@ const SessionPage = () => {
           </motion.div>
         </div>
 
-        {/* Right Column: Analysis & Actions */}
-        <div className="lg:col-span-2 space-y-6 order-1 lg:order-2">
-          {/* Document Summary & Analysis */}
+        {/* Right Column: AI Analysis & Actions */}
+        <div className="lg:col-span-2">
+          {/* Unified Analysis and Actions Card */}
           <motion.div className="card" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+            {/* Analysis Section */}
             <div className="card-header">
               <h2 className="card-title">Document Summary & Analysis</h2>
             </div>
-            {currentSession.analysis ? (
-              <div className="space-y-6">
-                {/* Summary */}
-                <AnalysisSection title="Summary" content={currentSession.analysis.summary} />
-
-                {/* Extracted Text for Vision Analysis */}
+            {analysis ? (
+              <div className="space-y-6 mb-6">
+                <AnalysisSection title="Summary" content={analysis.summary} />
                 {hasVisionAnalysis && (
                   <AnalysisSection title="Extracted Text">
-                    <div className="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
-                      <pre className="text-sm text-on-surface-secondary whitespace-pre-wrap">{currentSession.analysis.extractedText}</pre>
+                    <div className="bg-background p-3 rounded-lg max-h-40 overflow-y-auto">
+                      <pre className="text-sm text-on-surface-secondary whitespace-pre-wrap">{analysis.extractedText}</pre>
                     </div>
                   </AnalysisSection>
                 )}
-
-                {/* Key Points */}
-                <AnalysisSection title="Key Points" items={currentSession.analysis.keyPoints} />
-
-                {/* Client Needs */}
-                <AnalysisSection title="Client Needs" items={currentSession.analysis.clientNeeds} />
-
-                {/* Risk Assessment */}
+                <AnalysisSection title="Key Points" items={analysis.keyPoints} />
+                <AnalysisSection title="Client Needs" items={analysis.clientNeeds} />
                 <AnalysisSection title="Risk Assessment">
-                  <RiskAssessmentDisplay riskAssessment={currentSession.analysis.riskAssessment} />
+                  <RiskAssessmentDisplay riskAssessment={analysis.riskAssessment} />
                 </AnalysisSection>
-
-                {/* Compliance Flags */}
-                <AnalysisSection title="Compliance Flags" items={currentSession.analysis.complianceFlags} type="compliance" />
+                <AnalysisSection title="Compliance Flags" items={analysis.complianceFlags} type="compliance" />
               </div>
             ) : (
-              <p className="text-on-surface-secondary">No analysis available yet. The document may still be processing.</p>
+              <p className="text-on-surface-secondary text-center py-8">No analysis available.</p>
             )}
-          </motion.div>
 
-          {/* Advised Actions */}
-          <motion.div className="card" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-            <div className="card-header">
-              <h2 className="card-title">Advised Actions</h2>
-            </div>
-            <div className="space-y-4">
-              {currentSession.suggestedActions?.length > 0 ? (
-                currentSession.suggestedActions.map((action, index) => (
-                  <ActionItem key={action.id || `action-${index}`} action={action} index={index} isExecuting={executingActions.has(action.id)} isCompleted={currentSession.actionResults?.[action.id]} onExecute={() => handleExecuteAction(action)} />
-                ))
-              ) : (
-                <p className="text-on-surface-secondary">No advised actions available.</p>
-              )}
+            {/* Divider */}
+            <hr className="border-border my-6" />
+
+            {/* Suggested Actions Section */}
+            <div>
+              <h2 className="card-title mb-4">Suggested Actions</h2>
+              <div className="space-y-4">
+                {analysis?.suggestedActions?.length > 0 ? (
+                  analysis.suggestedActions.map((action, index) => {
+                    const isExecuting = executingActions.has(action.id);
+                    const isCompleted = currentSession?.actionResults?.[action.id];
+                    const executionResult = currentSession?.actionResults?.[action.id];
+
+                    // Debug logging
+                    console.log(`🔍 Action ${action.id} status:`, {
+                      isExecuting,
+                      isCompleted: !!isCompleted,
+                      executionResult,
+                      actionResults: currentSession?.actionResults,
+                      executingActions: Array.from(executingActions),
+                    });
+
+                    return <ActionItem key={action.id || `action-${index}`} action={action} onExecute={() => handleExecuteAction(action)} isExecuting={isExecuting} isCompleted={!!isCompleted} executionResult={executionResult} />;
+                  })
+                ) : (
+                  <p className="text-on-surface-secondary text-center py-8">No actions suggested.</p>
+                )}
+              </div>
             </div>
           </motion.div>
         </div>
@@ -511,30 +520,34 @@ const AnalysisSection = ({ title, content, items, type, children }) => {
   );
 };
 
-const ActionItem = ({ action, index, isExecuting, isCompleted, onExecute }) => (
-  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-primary transition-colors">
+const ActionItem = ({ action, onExecute, isExecuting, isCompleted, executionResult }) => (
+  <div className="action-card">
     <div className="flex items-start justify-between">
       <div className="flex items-start space-x-3 flex-1">
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs font-medium flex-shrink-0">{index + 1}</div>
+        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs font-medium flex-shrink-0">{action.priority}</div>
         <div className="flex-1">
           <p className="font-semibold text-on-surface mb-1">{action.title || action.description}</p>
           <p className="text-sm text-on-surface-secondary mb-2">{action.description}</p>
           <div className="flex items-center space-x-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${action.priority === "high" ? "bg-red-100 text-red-700" : action.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>{action.priority} priority</span>
             <span className="text-xs text-on-surface-secondary">{action.type}</span>
+            {isCompleted && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Completed</span>}
           </div>
+          {executionResult && (
+            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
+              <p className="text-green-800">{executionResult.message || "Action executed successfully"}</p>
+            </div>
+          )}
         </div>
       </div>
       <div className="ml-4">
         {isCompleted ? (
-          <div className="flex items-center gap-2 text-green-600">
-            <Check className="w-4 h-4" />
-            <span className="text-sm font-medium">Completed</span>
+          <div className="flex items-center text-green-600">
+            <CheckCircle className="w-5 h-5" />
           </div>
         ) : (
-          <button onClick={onExecute} disabled={isExecuting} className="btn btn-primary text-sm">
+          <button onClick={onExecute} disabled={isExecuting} className="btn btn-primary">
             {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            <span>{isExecuting ? "Executing..." : "Execute"}</span>
+            {isExecuting ? "Executing..." : "Execute"}
           </button>
         )}
       </div>

@@ -663,6 +663,9 @@ app.post("/api/sessions/:sessionId/actions/:actionId", async (req, res) => {
       console.log("⚠️ updateSubSession method not available, skipping sub-session update");
     }
 
+    // Store action result directly in the session for UI access
+    sessionManager.addActionResult(sessionId, actionId, result);
+
     const response = {
       sessionId,
       subSessionId,

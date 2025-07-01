@@ -187,6 +187,25 @@ class SessionManager {
     }
   }
 
+  addActionResult(sessionId, actionId, result) {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      // Initialize actionResults if it doesn't exist
+      if (!session.actionResults) {
+        session.actionResults = {};
+      }
+
+      // Store the action result
+      session.actionResults[actionId] = result;
+      session.metadata.lastActivity = new Date().toISOString();
+
+      // Save to persistent storage
+      this.saveSessions().catch((err) => console.error("Error saving session:", err));
+
+      console.log(`✅ Action result stored for action ${actionId} in session ${sessionId}`);
+    }
+  }
+
   createSubSession(sessionId, actionId, actionData) {
     const session = this.sessions.get(sessionId);
     if (!session) {

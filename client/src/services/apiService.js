@@ -96,14 +96,20 @@ class ApiService {
 
     const eventSource = new EventSource(statusUrl);
     let isProcessingComplete = false;
+    let connectionClosed = false;
 
     // Safety timeout in case processing complete message is missed
     const safetyTimeout = setTimeout(() => {
-      if (!isProcessingComplete) {
+      if (!isProcessingComplete && !connectionClosed) {
         console.warn("⚠️ SSE safety timeout reached, closing connection");
+        connectionClosed = true;
         eventSource.close();
       }
-    }, 30000); // 30 second safety timeout
+    }, 45000); // Increased to 45 second safety timeout
+
+    eventSource.onopen = () => {
+      console.log("📡 SSE connection opened successfully");
+    };
 
     eventSource.onmessage = (event) => {
       try {
@@ -120,16 +126,19 @@ class ApiService {
           clearTimeout(safetyTimeout);
         }
 
-        if (onStatusUpdate) {
+        if (onStatusUpdate && !connectionClosed) {
           onStatusUpdate(data);
         }
 
-        // Close connection after processing complete message is handled
-        if (isProcessingComplete) {
+        // Close connection after processing complete message is handled with longer delay
+        if (isProcessingComplete && !connectionClosed) {
           setTimeout(() => {
-            console.log(`📡 Closing SSE connection after processing completion`);
-            eventSource.close();
-          }, 500); // Small delay to ensure UI updates
+            if (!connectionClosed) {
+              console.log(`📡 Closing SSE connection after processing completion`);
+              connectionClosed = true;
+              eventSource.close();
+            }
+          }, 2500); // Increased delay to ensure UI updates and navigation can occur
         }
       } catch (error) {
         console.error("Error parsing SSE data:", error);
@@ -139,10 +148,29 @@ class ApiService {
     eventSource.onerror = (error) => {
       console.error("SSE connection error:", error);
       clearTimeout(safetyTimeout);
-      if (!isProcessingComplete) {
+
+      // Only log error if processing wasn't already complete
+      if (!isProcessingComplete && !connectionClosed) {
         console.log("SSE error occurred before processing completion");
+
+        // If we get an error before completion, try to gracefully handle it
+        // by calling the status update with an error, but don't close immediately
+        // in case it's just a temporary network issue
+        if (onStatusUpdate) {
+          setTimeout(() => {
+            onStatusUpdate({
+              type: "error",
+              message: "Connection interrupted, but upload may have completed",
+              timestamp: new Date().toISOString(),
+            });
+          }, 1000);
+        }
       }
-      eventSource.close();
+
+      if (!connectionClosed) {
+        connectionClosed = true;
+        eventSource.close();
+      }
     };
 
     return eventSource;
@@ -166,10 +194,13 @@ class ApiService {
           "Content-Type": "multipart/form-data",
         },
         onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          console.log(`📊 Upload progress: ${percentCompleted}%`);
+          // Limit HTTP upload progress to only 20% of total progress bar
+          // The remaining 80% will be handled by SSE processing updates
+          const uploadPercent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          const limitedProgress = Math.round((uploadPercent * 20) / 100); // Cap at 20%
+          console.log(`📊 HTTP Upload progress: ${uploadPercent}% (limited to ${limitedProgress}% of total)`);
           if (onProgress) {
-            onProgress(percentCompleted);
+            onProgress(limitedProgress);
           }
         },
       });
@@ -207,6 +238,11 @@ class ApiService {
       console.error("Vision analysis error:", error);
       throw new Error("Failed to analyze document with vision.");
     }
+  }
+
+  async archiveDocument(sessionId, documentId) {
+    const response = await this.client.post(`/sessions/${sessionId}/documents/${documentId}/archive`);
+    return response.data;
   }
 
   async processImageCapture(sessionId, imageData) {

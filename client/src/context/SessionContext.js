@@ -324,14 +324,29 @@ export function SessionProvider({ children }) {
             case "processing_complete":
               newStage = "Processing complete!";
               setProcessingStage(newStage);
+              // Only reset processing states when we receive completion message
+              setTimeout(() => {
+                setLoading(false);
+                setProcessingDocument(false);
+                console.log("🎯 Processing states reset after completion message");
+              }, 200); // Reduced delay since navigation takes 3s anyway
               break;
             case "complete":
               newStage = "Processing complete!";
               setProcessingStage(newStage);
+              // Only reset processing states when we receive completion message
+              setTimeout(() => {
+                setLoading(false);
+                setProcessingDocument(false);
+                console.log("🎯 Processing states reset after completion message");
+              }, 200); // Reduced delay since navigation takes 3s anyway
               break;
             case "error":
               newStage = `Error: ${statusData.message}`;
               setProcessingStage(newStage);
+              // Reset processing states on error
+              setLoading(false);
+              setProcessingDocument(false);
               break;
             default:
               if (statusData.message) {
@@ -352,12 +367,61 @@ export function SessionProvider({ children }) {
             }, 100);
           }
 
-          // Update progress if provided
-          if (statusData.progress !== null && statusData.progress !== undefined) {
-            console.log("📡 [DEBUG] Setting progress:", statusData.progress);
-            setUploadProgress(statusData.progress);
+          // Calculate more gradual progress based on processing stage
+          // HTTP upload covers 0-20%, SSE processing covers 20-100%
+          let progressPercentage = statusData.progress;
+          if (progressPercentage === null || progressPercentage === undefined) {
+            switch (statusData.type) {
+              case "upload_start":
+                progressPercentage = 5; // Early upload stage
+                break;
+              case "session_validated":
+                progressPercentage = 25; // After HTTP upload completes
+                break;
+              case "processing_start":
+                progressPercentage = 30;
+                break;
+              case "vision_start":
+              case "text_extraction_start":
+                progressPercentage = 40;
+                break;
+              case "vision_processing":
+                progressPercentage = 55;
+                break;
+              case "vision_complete":
+              case "text_extraction_complete":
+                progressPercentage = 70;
+                break;
+              case "ai_analysis_start":
+                progressPercentage = 75;
+                break;
+              case "ai_analysis_complete":
+                progressPercentage = 85;
+                break;
+              case "saving_document":
+                progressPercentage = 90;
+                break;
+              case "processing_complete":
+              case "complete":
+                // Gradually increase to 100% instead of jumping
+                progressPercentage = 95;
+                // Set to 100% after a brief delay to show gradual completion
+                setTimeout(() => {
+                  setUploadProgress(100);
+                }, 1000);
+                break;
+              default:
+                // Don't update progress for unknown stages
+                progressPercentage = null;
+            }
+          }
+
+          // Update progress if we have a value
+          if (progressPercentage !== null && progressPercentage !== undefined) {
+            console.log("📡 [DEBUG] Setting progress:", progressPercentage);
+            setUploadProgress(progressPercentage);
           } else {
-            console.log("📡 [DEBUG] No progress in status update");
+            console.log("📡 [DEBUG] No progress calculation for this stage");
           }
 
           // Store detailed status info
@@ -381,19 +445,21 @@ export function SessionProvider({ children }) {
       } catch (error) {
         setError(error.message);
         setProcessingStage(`Error: ${error.message}`);
-        throw error;
-      } finally {
+        // Reset processing states on error
         setLoading(false);
         setProcessingDocument(false);
-        // Don't reset progress and stage immediately to show completion state
+        throw error;
+      } finally {
+        // Don't immediately reset processing states here - let SSE completion message handle it
+        // Only reset progress and stage after a delay to show completion state
         setTimeout(() => {
           setUploadProgress(0);
           setProcessingStage("");
           setProcessingDetails(null);
-        }, 3000);
+        }, 5000); // Increased delay to ensure completion is shown
       }
     },
-    [state.currentSession?.id, loadSession, setLoading, setError, setProcessingDocument, setUploadProgress, setProcessingStage, setProcessingDetails]
+    [state.currentSession?.id, loadSession, setLoading, setError, setProcessingDocument, setUploadProgress, setProcessingStage, setProcessingDetails, state.processingStage]
   );
 
   const analyzeDocument = useCallback(

@@ -12,7 +12,15 @@ const HomePage = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [vortexSize, setVortexSize] = useState(320);
+  const [vortexSize, setVortexSize] = useState(400);
+
+  // New state to track completed stages cumulatively
+  const [stageStatus, setStageStatus] = useState({
+    sessionCreated: false,
+    visionCompleted: false,
+    aiCompleted: false,
+    reviewReady: false,
+  });
 
   // Use processing stage from context
   const processingStage = contextProcessingStage;
@@ -53,63 +61,91 @@ const HomePage = () => {
     });
   }, [sessions]);
 
-  const stageStatus = useMemo(() => {
+  // Effect to cumulatively update the completed stages
+  useEffect(() => {
     if (!processingStage) {
-      return {
-        sessionCreated: false,
-        visionCompleted: false,
-        aiCompleted: false,
-        reviewReady: false,
-      };
+      // If processing stops or hasn't started, reset stages
+      if (stageStatus.sessionCreated || stageStatus.visionCompleted || stageStatus.aiCompleted || stageStatus.reviewReady) {
+        setStageStatus({
+          sessionCreated: false,
+          visionCompleted: false,
+          aiCompleted: false,
+          reviewReady: false,
+        });
+      }
+      return;
     }
 
-    console.log("🔍 [DEBUG] Current processing stage for stageStatus calculation:", processingStage);
+    setStageStatus((currentStatus) => {
+      // Create a new object to avoid direct mutation and unnecessary re-renders
+      const newStatus = { ...currentStatus };
+      let hasChanged = false;
 
-    // Session setup is complete when we start processing or beyond
-    const isSessionCreated =
-      processingStage.includes("Session validated") ||
-      processingStage.includes("document processing") ||
-      processingStage.includes("vision") ||
-      processingStage.includes("text extraction") ||
-      processingStage.includes("AI analysis") ||
-      processingStage.includes("Saving document") ||
-      processingStage.includes("complete");
+      // Stage 1: Document Upload & Session Setup
+      if (!newStatus.sessionCreated) {
+        const isComplete =
+          processingStage.includes("Document upload") ||
+          processingStage.includes("Session validated") ||
+          processingStage.includes("Starting document processing") ||
+          processingStage.includes("Image detected") ||
+          processingStage.includes("vision") ||
+          processingStage.includes("Text extraction") ||
+          processingStage.includes("AI analysis") ||
+          processingStage.includes("Saving document") ||
+          processingStage.includes("Processing complete");
+        if (isComplete) {
+          newStatus.sessionCreated = true;
+          hasChanged = true;
+        }
+      }
 
-    // Vision/text processing is complete when AI analysis starts or beyond
-    const isVisionCompleted = processingStage.includes("Vision processing completed") || processingStage.includes("Text extraction completed") || processingStage.includes("AI analysis") || processingStage.includes("Saving document") || processingStage.includes("complete");
+      // Stage 2: Vision/Text Processing
+      if (!newStatus.visionCompleted) {
+        const isComplete = processingStage.includes("Vision processing completed") || processingStage.includes("Text extraction completed") || processingStage.includes("AI analysis") || processingStage.includes("Saving document") || processingStage.includes("Processing complete");
+        if (isComplete) {
+          newStatus.visionCompleted = true;
+          hasChanged = true;
+        }
+      }
 
-    // AI analysis is complete when saving starts or beyond
-    const isAICompleted = processingStage.includes("AI analysis completed") || processingStage.includes("Saving document") || processingStage.includes("Processing complete");
+      // Stage 3: AI Analysis & Insights
+      if (!newStatus.aiCompleted) {
+        const isComplete = processingStage.includes("AI analysis completed") || processingStage.includes("Saving document") || processingStage.includes("Processing complete");
+        if (isComplete) {
+          newStatus.aiCompleted = true;
+          hasChanged = true;
+        }
+      }
 
-    // Review is ready only when processing is completely finished
-    const isReviewReady = processingStage.includes("Processing complete!");
+      // Stage 4: Ready for Review
+      if (!newStatus.reviewReady) {
+        const isComplete = processingStage.includes("Processing complete!");
+        if (isComplete) {
+          newStatus.reviewReady = true;
+          hasChanged = true;
+        }
+      }
 
-    const calculatedStatus = {
-      sessionCreated: isSessionCreated,
-      visionCompleted: isVisionCompleted,
-      aiCompleted: isAICompleted,
-      reviewReady: isReviewReady,
-    };
-
-    console.log("🔍 [DEBUG] Calculated stage status:", calculatedStatus);
-    return calculatedStatus;
-  }, [processingStage]);
+      // Only update state if something has actually changed
+      return hasChanged ? newStatus : currentStatus;
+    });
+  }, [processingStage, stageStatus]);
 
   // Effect to handle navigation after processing is truly complete
   useEffect(() => {
-    // Only navigate when processing is completely finished, no errors, and we have results
-    if (processingStage === "Processing complete!" && !processingStage.includes("Error") && activeSession?.id && activeSession.documents?.length > 0) {
-      console.log("🎯 Processing complete detected, waiting 1.5s before navigation...");
+    // Navigate only when the final "Ready for Review" stage is marked as complete
+    if (stageStatus.reviewReady && activeSession?.id) {
+      console.log("✅ Final stage 'Ready for Review' is complete. Waiting 5s before navigation...");
 
-      // Wait a bit to let users see the completion status, then navigate
+      // Wait a moment after the final checkmark appears to ensure the user sees it
       const timer = setTimeout(() => {
         console.log("🚀 Navigating to session results...");
         navigate(`/session/${activeSession.id}`);
-      }, 2500); // Increased delay to ensure status is fully displayed
+      }, 5000); // 5-second delay after final checkmark
 
       return () => clearTimeout(timer);
     }
-  }, [processingStage, activeSession, navigate]);
+  }, [stageStatus.reviewReady, activeSession?.id, navigate]);
 
   useEffect(() => {
     loadSessions();
@@ -143,6 +179,14 @@ const HomePage = () => {
   };
 
   const handleDocumentUpload = async (file) => {
+    // Reset stage status for new upload
+    setStageStatus({
+      sessionCreated: false,
+      visionCompleted: false,
+      aiCompleted: false,
+      reviewReady: false,
+    });
+
     try {
       // Always create a new session for each upload, as requested.
       console.log("📝 Creating new session for new upload...");

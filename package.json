@@ -12,10 +12,19 @@
     "build": "cd client && npm run build",
     "start-prod": "cd server && npm start"
   },
-  "keywords": ["vortex", "office-agent", "advisory", "ai", "pwa"],
+  "keywords": [
+    "vortex",
+    "office-agent",
+    "advisory",
+    "ai",
+    "pwa"
+  ],
   "author": "Product Owner",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
-} 
+}
