@@ -528,13 +528,60 @@ const ActionItem = ({ action, onExecute, isExecuting, isCompleted, executionResu
         <div className="flex-1">
           <p className="font-semibold text-on-surface mb-1">{action.title || action.description}</p>
           <p className="text-sm text-on-surface-secondary mb-2">{action.description}</p>
-          <div className="flex items-center space-x-2">
+
+          {/* Action metadata */}
+          <div className="flex items-center space-x-4 mb-2">
             <span className="text-xs text-on-surface-secondary">{action.type}</span>
+            {action.systemContext && <span className="text-xs text-on-surface-secondary">→ {action.systemContext.targetSystem}</span>}
+            {action.systemContext?.estimatedProcessingTime && <span className="text-xs text-on-surface-secondary">⏱ {action.systemContext.estimatedProcessingTime}</span>}
             {isCompleted && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Completed</span>}
           </div>
+
+          {/* Execution timestamp and details */}
           {executionResult && (
-            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
-              <p className="text-green-800">{executionResult.message || "Action executed successfully"}</p>
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+              <div className="flex items-start justify-between mb-2">
+                <p className="text-green-800 font-medium">{executionResult.message || "Action executed successfully"}</p>
+                {executionResult.systemInfo?.processedAt && <span className="text-xs text-green-600">{new Date(executionResult.systemInfo.processedAt).toLocaleString()}</span>}
+              </div>
+
+              {/* System information */}
+              {executionResult.systemInfo && (
+                <div className="grid grid-cols-2 gap-2 text-xs text-green-700 mb-2">
+                  <div>
+                    <span className="font-medium">System:</span> {executionResult.systemInfo.targetSystem}
+                  </div>
+                  <div>
+                    <span className="font-medium">Processing Time:</span> {executionResult.systemInfo.processingTimeMs}ms
+                  </div>
+                  {executionResult.systemInfo.transactionId && (
+                    <div className="col-span-2">
+                      <span className="font-medium">Transaction ID:</span> {executionResult.systemInfo.transactionId}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Next steps */}
+              {executionResult.systemInfo?.nextSteps && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-green-700 mb-1">Next Steps:</p>
+                  <ul className="text-xs text-green-600 list-disc list-inside space-y-1">
+                    {executionResult.systemInfo.nextSteps.map((step, index) => (
+                      <li key={index}>{step}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Audit trail */}
+              {executionResult.auditTrail && (
+                <div className="mt-2 pt-2 border-t border-green-200">
+                  <p className="text-xs text-green-600">
+                    <span className="font-medium">Audit:</span> {executionResult.auditTrail.action} by {executionResult.auditTrail.performedBy} at {new Date(executionResult.auditTrail.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

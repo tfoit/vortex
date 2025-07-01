@@ -185,6 +185,8 @@ class MockBankingService {
 
   async createClientNote(actionData) {
     const noteId = uuidv4();
+    const processingStart = new Date();
+
     const note = {
       id: noteId,
       content: actionData.data.noteContent,
@@ -193,6 +195,11 @@ class MockBankingService {
       advisorId: actionData.advisorId || "unknown",
       createdAt: new Date().toISOString(),
       status: "active",
+      metadata: {
+        wordCount: actionData.data.noteContent?.split(" ").length || 0,
+        source: "AI Advisory Analysis",
+        priority: actionData.priority || "medium",
+      },
     };
 
     this.clientNotes.set(noteId, note);
@@ -202,16 +209,37 @@ class MockBankingService {
     // Simulate processing delay
     await this.simulateDelay(500, 1500);
 
+    const processingEnd = new Date();
+    const processingTime = processingEnd - processingStart;
+
     return {
       success: true,
       noteId: noteId,
       message: "Client note created successfully",
       data: note,
+      systemInfo: {
+        targetSystem: "Client Management System",
+        processedAt: processingEnd.toISOString(),
+        processingTimeMs: processingTime,
+        systemStatus: "online",
+        transactionId: `TXN-${noteId.substr(0, 8).toUpperCase()}`,
+        approvalStatus: "auto-approved",
+        nextSteps: ["Note saved to client file", "Advisor notification sent", "Audit trail updated"],
+      },
+      auditTrail: {
+        action: "CREATE_CLIENT_NOTE",
+        performedBy: actionData.advisorId || "system",
+        timestamp: processingEnd.toISOString(),
+        ipAddress: "127.0.0.1", // Mock IP
+        sessionId: actionData.sessionId || "unknown",
+      },
     };
   }
 
   async fillComplianceForm(actionData) {
     const formId = uuidv4();
+    const processingStart = new Date();
+
     const form = {
       id: formId,
       type: actionData.data.formType || "KYC",
@@ -231,17 +259,38 @@ class MockBankingService {
     // Simulate processing delay
     await this.simulateDelay(1000, 2000);
 
+    const processingEnd = new Date();
+    const processingTime = processingEnd - processingStart;
+
     return {
       success: true,
       formId: formId,
       message: `${form.type} compliance form created and pre-filled`,
       data: form,
       nextSteps: ["Review auto-filled information", "Complete missing fields", "Submit for compliance approval"],
+      systemInfo: {
+        targetSystem: "Compliance Management System",
+        processedAt: processingEnd.toISOString(),
+        processingTimeMs: processingTime,
+        systemStatus: "online",
+        transactionId: `COMP-${formId.substr(0, 8).toUpperCase()}`,
+        approvalStatus: "pending_review",
+        completionRate: `${form.completionPercentage}%`,
+        nextSteps: ["Review auto-filled information", "Complete missing fields", "Submit for compliance approval"],
+      },
+      auditTrail: {
+        action: "FILL_COMPLIANCE_FORM",
+        performedBy: actionData.advisorId || "system",
+        timestamp: processingEnd.toISOString(),
+        ipAddress: "127.0.0.1",
+        sessionId: actionData.sessionId || "unknown",
+      },
     };
   }
 
   async updateClientProfile(actionData) {
     const clientId = actionData.clientId || actionData.data.clientId;
+    const processingStart = new Date();
 
     if (!clientId) {
       throw new Error("Client ID is required for profile update");
@@ -275,17 +324,40 @@ class MockBankingService {
     // Simulate processing delay
     await this.simulateDelay(300, 800);
 
+    const processingEnd = new Date();
+    const processingTime = processingEnd - processingStart;
+
     return {
       success: true,
       clientId: clientId,
       message: "Client profile updated successfully",
       data: profile,
       updatedFields: Object.keys(updates),
+      systemInfo: {
+        targetSystem: "Customer Database",
+        processedAt: processingEnd.toISOString(),
+        processingTimeMs: processingTime,
+        systemStatus: "online",
+        transactionId: `PROF-${clientId.substr(0, 8).toUpperCase()}`,
+        approvalStatus: "auto-approved",
+        fieldsUpdated: Object.keys(updates).length,
+        nextSteps: ["Profile updated in CRM", "Change notification sent", "Backup created"],
+      },
+      auditTrail: {
+        action: "UPDATE_CLIENT_PROFILE",
+        performedBy: actionData.advisorId || "system",
+        timestamp: processingEnd.toISOString(),
+        ipAddress: "127.0.0.1",
+        sessionId: actionData.sessionId || "unknown",
+        changedFields: Object.keys(updates),
+      },
     };
   }
 
   async scheduleFollowUp(actionData) {
     const followUpId = uuidv4();
+    const processingStart = new Date();
+
     const followUp = {
       id: followUpId,
       clientId: actionData.clientId || "unknown",
@@ -306,6 +378,9 @@ class MockBankingService {
     // Simulate processing delay
     await this.simulateDelay(200, 600);
 
+    const processingEnd = new Date();
+    const processingTime = processingEnd - processingStart;
+
     return {
       success: true,
       followUpId: followUpId,
@@ -314,6 +389,23 @@ class MockBankingService {
       calendarInvite: {
         sent: true,
         recipientEmail: this.getClientEmail(followUp.clientId),
+      },
+      systemInfo: {
+        targetSystem: "Calendar & CRM System",
+        processedAt: processingEnd.toISOString(),
+        processingTimeMs: processingTime,
+        systemStatus: "online",
+        transactionId: `MEET-${followUpId.substr(0, 8).toUpperCase()}`,
+        approvalStatus: "auto-approved",
+        meetingDate: followUp.scheduledDate,
+        nextSteps: ["Calendar invite sent", "Reminder set", "Client notified"],
+      },
+      auditTrail: {
+        action: "SCHEDULE_FOLLOW_UP",
+        performedBy: actionData.advisorId || "system",
+        timestamp: processingEnd.toISOString(),
+        ipAddress: "127.0.0.1",
+        sessionId: actionData.sessionId || "unknown",
       },
     };
   }

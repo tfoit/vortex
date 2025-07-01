@@ -33,12 +33,8 @@ class AIService {
 
       const analysis = await this.ollamaService.analyzeDocument(documentText, "advisory_minutes");
 
-      if (analysis && analysis.suggestedActions) {
-        analysis.suggestedActions.forEach((action) => {
-          action.id = this.generateActionId();
-        });
-        console.log(`🎯 AI Service: Added IDs to ${analysis.suggestedActions.length} suggested actions`);
-      }
+      // Add unique IDs and deduplicate actions
+      this.addUniqueIdsToActions(analysis);
       return analysis;
     } catch (error) {
       console.error("❌ AI Service: Error during local document analysis:", error.message);
@@ -96,11 +92,8 @@ class AIService {
     const analysisJson = response.choices[0].message.content;
     const analysis = JSON.parse(analysisJson);
 
-    if (analysis && analysis.suggestedActions) {
-      analysis.suggestedActions.forEach((action) => {
-        action.id = this.generateActionId();
-      });
-    }
+    // Add unique IDs and deduplicate actions
+    this.addUniqueIdsToActions(analysis);
     return analysis;
   }
 
@@ -237,9 +230,75 @@ Note: This is an AI-generated summary. Please review and adjust as necessary.`;
     };
   }
 
-  generateActionId() {
-    // Generate a unique ID for suggested actions
-    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+  generateActionId(action) {
+    // Create a unique ID based on action type and key properties
+    const actionKey = `${action.type}_${action.priority || "medium"}_${action.title?.replace(/\s+/g, "_") || "default"}`;
+    return actionKey.toLowerCase() + "_" + Date.now();
+  }
+
+  addUniqueIdsToActions(analysis) {
+    if (analysis && analysis.suggestedActions) {
+      // Deduplicate actions by type and similar content
+      const seenActions = new Map();
+      const uniqueActions = [];
+
+      analysis.suggestedActions.forEach((action) => {
+        const actionKey = `${action.type}_${action.title || action.description}`;
+
+        if (!seenActions.has(actionKey)) {
+          action.id = this.generateActionId(action);
+          action.timestamp = new Date().toISOString();
+          action.status = "pending";
+
+          // Add system context information
+          action.systemContext = {
+            generatedBy: "AI Analysis",
+            targetSystem: this.getTargetSystem(action.type),
+            estimatedProcessingTime: this.getEstimatedProcessingTime(action.type),
+            requiredApprovals: this.getRequiredApprovals(action.type),
+          };
+
+          uniqueActions.push(action);
+          seenActions.set(actionKey, action);
+          console.log(`🎯 AI Service: Added unique action ${action.type} with ID ${action.id}`);
+        } else {
+          console.log(`⚠️ AI Service: Skipping duplicate action ${action.type}: ${action.title || action.description}`);
+        }
+      });
+
+      analysis.suggestedActions = uniqueActions;
+      console.log(`🎯 AI Service: Processed ${uniqueActions.length} unique actions (removed ${analysis.suggestedActions.length - uniqueActions.length} duplicates)`);
+    }
+  }
+
+  getTargetSystem(actionType) {
+    const systemMap = {
+      CREATE_CLIENT_NOTE: "Client Management System",
+      FILL_COMPLIANCE_FORM: "Compliance Management System",
+      UPDATE_CLIENT_PROFILE: "Customer Database",
+      SCHEDULE_FOLLOW_UP: "Calendar & CRM System",
+    };
+    return systemMap[actionType] || "Banking Core System";
+  }
+
+  getEstimatedProcessingTime(actionType) {
+    const timeMap = {
+      CREATE_CLIENT_NOTE: "1-2 seconds",
+      FILL_COMPLIANCE_FORM: "2-5 seconds",
+      UPDATE_CLIENT_PROFILE: "1-3 seconds",
+      SCHEDULE_FOLLOW_UP: "1-2 seconds",
+    };
+    return timeMap[actionType] || "1-3 seconds";
+  }
+
+  getRequiredApprovals(actionType) {
+    const approvalMap = {
+      CREATE_CLIENT_NOTE: ["Advisor Review"],
+      FILL_COMPLIANCE_FORM: ["Advisor Review", "Compliance Officer"],
+      UPDATE_CLIENT_PROFILE: ["Advisor Review", "Data Protection Officer"],
+      SCHEDULE_FOLLOW_UP: ["Advisor Review"],
+    };
+    return approvalMap[actionType] || ["Advisor Review"];
   }
 }
 
