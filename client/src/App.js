@@ -14,6 +14,7 @@ function MainApp() {
   const [appError, setAppError] = useState(null);
   const [showIntro, setShowIntro] = useState(true);
   const [introCompleted, setIntroCompleted] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     // Handle online/offline status
@@ -49,11 +50,17 @@ function MainApp() {
   };
 
   const handleIntroComplete = () => {
+    console.log("Intro complete, starting transition...");
     setIntroCompleted(true);
-    // Add a small delay before hiding intro for smooth transition
+    setIsTransitioning(true);
+
+    // Smooth transition: fade out intro, then show main app
     setTimeout(() => {
       setShowIntro(false);
-    }, 800);
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 500);
+    }, 1000);
   };
 
   // Skip intro if user has seen it before (stored in localStorage)
@@ -98,25 +105,27 @@ function MainApp() {
     console.log("Rendering intro animation");
     return (
       <div className="fixed inset-0 z-50 bg-white">
-        <IntroAnimation width={typeof window !== "undefined" ? window.innerWidth : 1200} height={typeof window !== "undefined" ? window.innerHeight : 800} onComplete={handleIntroComplete} />
+        <div className={`transition-opacity duration-1000 ${introCompleted && isTransitioning ? "opacity-0" : "opacity-100"}`}>
+          <IntroAnimation width={typeof window !== "undefined" ? window.innerWidth : 1200} height={typeof window !== "undefined" ? window.innerHeight : 800} onComplete={handleIntroComplete} />
 
-        {/* Skip button for returning users */}
-        <button onClick={handleSkipIntro} className="absolute top-4 right-4 z-10 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
-          Skip intro
-        </button>
-
-        {/* Development skip button */}
-        {process.env.NODE_ENV === "development" && (
-          <button onClick={handleSkipIntroDev} className="absolute top-4 left-4 z-10 px-4 py-2 text-sm text-blue-500 hover:text-blue-700 transition-colors" title="Skip intro permanently in development">
-            Skip (Dev)
+          {/* Skip button for returning users */}
+          <button onClick={handleSkipIntro} className="absolute top-4 right-4 z-10 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+            Skip intro
           </button>
-        )}
 
-        {/* Progress indicator */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
-          <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
-          <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" style={{ animationDelay: "0.2s" }}></div>
-          <div className="w-2 h-2 bg-red-300 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
+          {/* Development skip button */}
+          {process.env.NODE_ENV === "development" && (
+            <button onClick={handleSkipIntroDev} className="absolute top-4 left-4 z-10 px-4 py-2 text-sm text-blue-500 hover:text-blue-700 transition-colors" title="Skip intro permanently in development">
+              Skip (Dev)
+            </button>
+          )}
+
+          {/* Progress indicator */}
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" style={{ animationDelay: "0.2s" }}></div>
+            <div className="w-2 h-2 bg-red-300 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
+          </div>
         </div>
       </div>
     );

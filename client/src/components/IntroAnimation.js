@@ -6,14 +6,16 @@ const PHASES = {
   LOGO: "logo",
   PARTICLES_EMERGE: "particles_emerge",
   FORM_VORTEX: "form_vortex",
+  TRANSITION_TO_CALM: "transition_to_calm",
   COMPLETE: "complete",
 };
 
 // Animation parameters
 const INTRO_CONFIG = {
   LOGO_SCALE_DURATION: 2000,
-  PARTICLES_EMERGE_DURATION: 3000,
-  VORTEX_FORM_DURATION: 4000,
+  PARTICLES_EMERGE_DURATION: 2500,
+  VORTEX_FORM_DURATION: 3000,
+  CALM_TRANSITION_DURATION: 2000,
   PARTICLE_COUNT: 150,
   LOGO_PULSE_SPEED: 0.002,
   VORTEX_RADIUS: 160,
@@ -21,6 +23,19 @@ const INTRO_CONFIG = {
   UBS_RED: "#E60000",
   UBS_GRAY: "#767676",
   GOLD_ACCENT: "#FFD700",
+};
+
+// VortexAnimation CALM state parameters for smooth transition
+const CALM_STATE = {
+  ANGULAR_SPEED: 0.0005,
+  SPIRAL_SPEED: 0.008,
+  OSC_AMP_MIN: 2,
+  OSC_AMP_MAX: 7,
+  RED_PARTICLE_RATIO: 0.3,
+  BOND_COLOR: "rgba(80,80,80,0.18)",
+  BASE_PARTICLE_COLOR: "#B3B3B3",
+  VORTEX_RADIUS: 180,
+  PARTICLE_SIZE: 1.5,
 };
 
 function randomBetween(a, b) {
@@ -41,12 +56,19 @@ function createParticle(centerX, centerY, isFromLogo = true) {
     angle: randomBetween(0, Math.PI * 2),
     radius: randomBetween(80, 200),
     speed: randomBetween(0.005, 0.015),
-    size: randomBetween(1, 3),
+    size: randomBetween(1.5, 3),
     opacity: isFromLogo ? 0 : 0.7,
     color: Math.random() < 0.3 ? INTRO_CONFIG.UBS_RED : INTRO_CONFIG.UBS_GRAY,
     pulse: randomBetween(0, Math.PI * 2),
     pulseSpeed: randomBetween(0.01, 0.03),
     isFromLogo,
+    // Add calm state properties for smooth transition
+    normRadius: Math.random(),
+    oscSpeed: randomBetween(0.0007, 0.0015),
+    oscAmp: randomBetween(2, 7),
+    isRed: Math.random() < CALM_STATE.RED_PARTICLE_RATIO,
+    redPhase: randomBetween(0, Math.PI * 2),
+    redBreathSpeed: randomBetween(0.0007, 0.0012),
   };
 }
 
@@ -108,6 +130,12 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
           setPhase(PHASES.FORM_VORTEX);
         }
         setLogoOpacity(0.2);
+      } else if (elapsed < INTRO_CONFIG.LOGO_SCALE_DURATION + INTRO_CONFIG.PARTICLES_EMERGE_DURATION + INTRO_CONFIG.VORTEX_FORM_DURATION + INTRO_CONFIG.CALM_TRANSITION_DURATION) {
+        if (phase !== PHASES.TRANSITION_TO_CALM) {
+          console.log("Phase: TRANSITION_TO_CALM");
+          setPhase(PHASES.TRANSITION_TO_CALM);
+        }
+        setLogoOpacity(0.1);
       } else {
         if (phase !== PHASES.COMPLETE) {
           console.log("Phase: COMPLETE - calling onComplete");
@@ -149,13 +177,54 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
           particle.y = lerp(particle.y, targetY, vortexProgress * 0.1);
 
           particle.opacity = 0.8 + Math.sin(particle.pulse) * 0.2;
+        } else if (phase === PHASES.TRANSITION_TO_CALM) {
+          // Transition to calm state parameters
+          const transitionStart = INTRO_CONFIG.LOGO_SCALE_DURATION + INTRO_CONFIG.PARTICLES_EMERGE_DURATION + INTRO_CONFIG.VORTEX_FORM_DURATION;
+          const transitionProgress = Math.min(1, (elapsed - transitionStart) / INTRO_CONFIG.CALM_TRANSITION_DURATION);
+
+          // Gradually adjust to calm state physics
+          const calmSpeed = CALM_STATE.ANGULAR_SPEED * (0.7 + 0.6 * Math.random());
+          particle.speed = lerp(particle.speed, calmSpeed, transitionProgress * 0.1);
+
+          // Calculate position using calm state physics
+          particle.angle += particle.speed;
+          const organic = Math.sin(elapsed * particle.oscSpeed + particle.pulse) * particle.oscAmp * (1 + transitionProgress);
+          const radius = CALM_STATE.VORTEX_RADIUS * (0.5 + 0.5 * particle.normRadius);
+
+          particle.x = centerX + Math.cos(particle.angle) * radius + organic;
+          particle.y = centerY + Math.sin(particle.angle) * radius + organic;
+
+          // Transition particle colors to calm state
+          if (particle.isRed) {
+            const breath = 0.5 + 0.5 * Math.sin(elapsed * particle.redBreathSpeed + particle.redPhase);
+            particle.opacity = 0.4 + 0.6 * breath * transitionProgress;
+            particle.color = `rgba(230, 1, 0, ${particle.opacity})`;
+          } else {
+            particle.opacity = lerp(0.8, 0.7, transitionProgress);
+            // Gradually transition to calm gray color
+            const currentColor = transitionProgress < 0.5 ? INTRO_CONFIG.UBS_GRAY : CALM_STATE.BASE_PARTICLE_COLOR;
+            particle.color = currentColor;
+          }
         } else if (phase === PHASES.COMPLETE) {
-          // Final vortex state with full animation
-          particle.angle += particle.speed * 2;
-          const radius = INTRO_CONFIG.VORTEX_RADIUS * (0.7 + 0.3 * Math.sin(particle.pulse));
-          particle.x = centerX + Math.cos(particle.angle) * radius;
-          particle.y = centerY + Math.sin(particle.angle) * radius;
-          particle.opacity = 0.9;
+          // Final calm state matching VortexAnimation
+          particle.angle += CALM_STATE.ANGULAR_SPEED * (0.7 + 0.6 * Math.random());
+
+          // Apply calm state organic movement
+          const organic = Math.sin(elapsed * particle.oscSpeed + particle.pulse) * particle.oscAmp;
+          const radius = CALM_STATE.VORTEX_RADIUS * (0.5 + 0.5 * particle.normRadius);
+
+          particle.x = centerX + Math.cos(particle.angle) * radius + organic;
+          particle.y = centerY + Math.sin(particle.angle) * radius + organic;
+
+          // Apply calm state colors and breathing
+          if (particle.isRed) {
+            const breath = 0.5 + 0.5 * Math.sin(elapsed * particle.redBreathSpeed + particle.redPhase);
+            particle.opacity = 0.4 + 0.6 * breath;
+            particle.color = `rgba(230, 1, 0, ${particle.opacity})`;
+          } else {
+            particle.opacity = 0.7;
+            particle.color = CALM_STATE.BASE_PARTICLE_COLOR;
+          }
         }
       });
     }
@@ -177,9 +246,16 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
           ctx.globalAlpha = particle.opacity;
           ctx.fillStyle = particle.color;
           ctx.shadowColor = particle.color;
-          ctx.shadowBlur = phase === PHASES.FORM_VORTEX || phase === PHASES.COMPLETE ? 8 : 4;
+          ctx.shadowBlur = phase === PHASES.FORM_VORTEX || phase === PHASES.TRANSITION_TO_CALM || phase === PHASES.COMPLETE ? 8 : 4;
 
-          const size = particle.size * (1 + Math.sin(particle.pulse) * 0.3);
+          // Adjust particle size based on phase
+          let size = particle.size;
+          if (phase === PHASES.TRANSITION_TO_CALM || phase === PHASES.COMPLETE) {
+            size = CALM_STATE.PARTICLE_SIZE * (1 + Math.sin(particle.pulse) * 0.2);
+          } else {
+            size = particle.size * (1 + Math.sin(particle.pulse) * 0.3);
+          }
+
           ctx.beginPath();
           ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
           ctx.fill();
@@ -187,22 +263,29 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
         }
       });
 
-      // Draw connections between nearby particles in vortex phase
-      if (phase === PHASES.FORM_VORTEX || phase === PHASES.COMPLETE) {
+      // Draw connections between nearby particles in vortex and transition phases
+      if (phase === PHASES.FORM_VORTEX || phase === PHASES.TRANSITION_TO_CALM || phase === PHASES.COMPLETE) {
         ctx.save();
-        ctx.strokeStyle = `rgba(230, 0, 0, 0.2)`;
+
+        // Use calm state bond color during transition
+        const bondColor = phase === PHASES.TRANSITION_TO_CALM || phase === PHASES.COMPLETE ? CALM_STATE.BOND_COLOR : `rgba(230, 0, 0, 0.2)`;
+
+        ctx.strokeStyle = bondColor;
         ctx.lineWidth = 1;
 
         for (let i = 0; i < particlesRef.current.length; i++) {
           const p1 = particlesRef.current[i];
-          for (let j = i + 1; j < Math.min(i + 5, particlesRef.current.length); j++) {
+          for (let j = i + 1; j < Math.min(i + 8, particlesRef.current.length); j++) {
             const p2 = particlesRef.current[j];
             const dx = p2.x - p1.x;
             const dy = p2.y - p1.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist < 60) {
-              ctx.globalAlpha = (1 - dist / 60) * 0.3;
+            // Use calm state bond distance during transition
+            const bondDistance = phase === PHASES.TRANSITION_TO_CALM || phase === PHASES.COMPLETE ? 15 : 60;
+
+            if (dist < bondDistance) {
+              ctx.globalAlpha = (1 - dist / bondDistance) * 0.3;
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(p2.x, p2.y);
