@@ -451,20 +451,28 @@ app.post("/api/sessions/:sessionId/upload", upload.single("document"), async (re
     res.json(response);
   } catch (error) {
     console.error("❌ Server: Error processing document upload:", error);
-    sendStatusUpdate(sessionId, "error", `Processing failed: ${error.message}`);
 
-    // Close SSE connection on error
-    setTimeout(() => {
-      if (global.sseConnections && global.sseConnections.has(sessionId)) {
-        try {
-          const sseRes = global.sseConnections.get(sessionId);
-          sseRes.end();
-        } catch (sseError) {
-          console.error("Error closing SSE connection on error:", sseError.message);
+    // Safely get sessionId from req.params (defensive programming)
+    const { sessionId } = req.params;
+
+    if (sessionId) {
+      sendStatusUpdate(sessionId, "error", `Processing failed: ${error.message}`);
+
+      // Close SSE connection on error
+      setTimeout(() => {
+        if (global.sseConnections && global.sseConnections.has(sessionId)) {
+          try {
+            const sseRes = global.sseConnections.get(sessionId);
+            sseRes.end();
+          } catch (sseError) {
+            console.error("Error closing SSE connection on error:", sseError.message);
+          }
+          global.sseConnections.delete(sessionId);
         }
-        global.sseConnections.delete(sessionId);
-      }
-    }, 1000);
+      }, 1000);
+    } else {
+      console.error("❌ SessionId not available in error handler");
+    }
 
     res.status(500).json({ error: "Failed to process document" });
   }
@@ -977,6 +985,65 @@ app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, r
   } catch (error) {
     console.error("❌ Error archiving document:", error);
     res.status(500).json({ error: "Failed to archive document", details: error.message });
+  }
+});
+
+// Voice Chat Account Creation Endpoint
+app.post("/api/voice-chat/create-account", async (req, res) => {
+  try {
+    const { customerData } = req.body;
+
+    console.log("📞 Voice Chat: Account creation request received");
+    console.log("👤 Customer Data:", customerData);
+
+    // Simulate account creation process
+    const accountNumber = `UBS${Date.now().toString().slice(-8)}`;
+    const currentDate = new Date().toISOString();
+
+    // Create mock account data
+    const newAccount = {
+      accountNumber,
+      customerInfo: {
+        fullName: customerData.fullName || "Customer",
+        dateOfBirth: customerData.dateOfBirth,
+        contact: customerData.contact,
+        address: customerData.address,
+      },
+      accountDetails: {
+        type: customerData.accountType || "Savings Account",
+        initialDeposit: customerData.initialDeposit || "$0",
+        status: "Active",
+        openedDate: currentDate,
+      },
+      verification: {
+        idVerified: customerData.idVerified || false,
+        voiceVerified: true,
+        verificationDate: currentDate,
+      },
+      services: ["Online Banking", "Mobile Banking", "Voice Banking", "24/7 Customer Support"],
+    };
+
+    // Log to mock banking service
+    console.log("🏦 Mock Banking: Account created successfully");
+    console.log("🔢 Account Number:", accountNumber);
+    console.log("💳 Account Type:", newAccount.accountDetails.type);
+
+    // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    res.json({
+      success: true,
+      message: "Account created successfully via voice chat",
+      account: newAccount,
+      nextSteps: ["Check your email for account confirmation", "Download the UBS mobile app", "Visit a branch to receive your debit card", "Set up online banking credentials"],
+    });
+  } catch (error) {
+    console.error("❌ Error creating account via voice chat:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to create account",
+      message: "Please try again or visit a branch for assistance",
+    });
   }
 });
 

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import HomePage from "./components/HomePage";
 import SessionPage from "./components/SessionPage";
 import DashboardPage from "./components/DashboardPage";
+import IntroAnimation from "./components/IntroAnimation";
 import { SessionProvider } from "./context/SessionContext";
 import { apiService } from "./services/apiService";
 import "./App.css";
@@ -11,6 +12,8 @@ import "./App.css";
 function MainApp() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [appError, setAppError] = useState(null);
+  const [showIntro, setShowIntro] = useState(true);
+  const [introCompleted, setIntroCompleted] = useState(false);
 
   useEffect(() => {
     // Handle online/offline status
@@ -44,6 +47,68 @@ function MainApp() {
       }, 2000);
     }
   };
+
+  const handleIntroComplete = () => {
+    setIntroCompleted(true);
+    // Add a small delay before hiding intro for smooth transition
+    setTimeout(() => {
+      setShowIntro(false);
+    }, 800);
+  };
+
+  // Skip intro if user has seen it before (stored in localStorage)
+  useEffect(() => {
+    const hasSeenIntro = localStorage.getItem("vortex-intro-seen");
+    const isDevelopment = process.env.NODE_ENV === "development";
+    const skipIntroForDev = isDevelopment && localStorage.getItem("vortex-skip-intro-dev") === "true";
+
+    if (hasSeenIntro || skipIntroForDev) {
+      setShowIntro(false);
+      setIntroCompleted(true);
+    }
+  }, []);
+
+  const handleSkipIntro = () => {
+    localStorage.setItem("vortex-intro-seen", "true");
+    setShowIntro(false);
+    setIntroCompleted(true);
+  };
+
+  // Development helper to permanently skip intro
+  const handleSkipIntroDev = () => {
+    if (process.env.NODE_ENV === "development") {
+      localStorage.setItem("vortex-skip-intro-dev", "true");
+      handleSkipIntro();
+    }
+  };
+
+  // Show intro animation
+  if (showIntro) {
+    return (
+      <div className="fixed inset-0 z-50 bg-white">
+        <IntroAnimation width={window.innerWidth} height={window.innerHeight} onComplete={handleIntroComplete} />
+
+        {/* Skip button for returning users */}
+        <button onClick={handleSkipIntro} className="absolute top-4 right-4 z-10 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+          Skip intro
+        </button>
+
+        {/* Development skip button */}
+        {process.env.NODE_ENV === "development" && (
+          <button onClick={handleSkipIntroDev} className="absolute top-4 left-4 z-10 px-4 py-2 text-sm text-blue-500 hover:text-blue-700 transition-colors" title="Skip intro permanently in development">
+            Skip (Dev)
+          </button>
+        )}
+
+        {/* Progress indicator */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
+          <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+          <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" style={{ animationDelay: "0.2s" }}></div>
+          <div className="w-2 h-2 bg-red-300 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
+        </div>
+      </div>
+    );
+  }
 
   if (appError) {
     return (

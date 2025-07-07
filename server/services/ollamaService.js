@@ -5,12 +5,18 @@ const path = require("path");
 class OllamaService {
   constructor() {
     this.baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    this.defaultModel = process.env.OLLAMA_MODEL || "gemma3:27b-it-qat";
-    this.visionModel = process.env.OLLAMA_VISION_MODEL || "qwen2.5vl:latest";
+    this.defaultModel = process.env.OLLAMA_MODEL || "qwen:7b";
+    this.visionModel = process.env.OLLAMA_VISION_MODEL || "qwen:7b";
     this.timeout = 120000; // 2 minutes for vision processing
 
+    // Fallback vision models for M1 Max MacBook Pro (in order of preference)
+    this.fallbackVisionModels = ["llava:latest", "llava:13b", "llava:7b", "bakllava:latest", "llava-llama3:latest", "llava-phi3:latest"];
+
+    this.currentVisionModel = this.visionModel;
+
     console.log(`🦙 Ollama service initialized with model: ${this.defaultModel}`);
-    console.log(`👁️ Vision model: ${this.visionModel}`);
+    console.log(`👁️ Primary vision model: ${this.visionModel}`);
+    console.log(`🔄 Fallback vision models available: ${this.fallbackVisionModels.join(", ")}`);
   }
 
   async isAvailable() {
@@ -42,9 +48,44 @@ class OllamaService {
     }
   }
 
+  async findBestVisionModel() {
+    try {
+      const availableModels = await this.getAvailableModels();
+      const modelNames = availableModels.map((model) => model.name);
+
+      console.log(`🔍 Available Ollama models: ${modelNames.join(", ")}`);
+
+      // First try the primary vision model
+      if (modelNames.includes(this.visionModel)) {
+        console.log(`✅ Primary vision model ${this.visionModel} is available`);
+        this.currentVisionModel = this.visionModel;
+        return this.visionModel;
+      }
+
+      // Try fallback models in order of preference
+      for (const fallbackModel of this.fallbackVisionModels) {
+        if (modelNames.includes(fallbackModel)) {
+          console.log(`🔄 Using fallback vision model: ${fallbackModel}`);
+          this.currentVisionModel = fallbackModel;
+          return fallbackModel;
+        }
+      }
+
+      console.error("❌ No suitable vision model found!");
+      throw new Error("No vision model available. Please install one of: " + this.fallbackVisionModels.join(", "));
+    } catch (error) {
+      console.error("Error finding vision model:", error.message);
+      throw error;
+    }
+  }
+
   async extractTextFromImage(imagePath) {
     try {
       console.log(`👁️ Starting vision-based text extraction from: ${path.basename(imagePath)}`);
+
+      // Find the best available vision model
+      const modelToUse = await this.findBestVisionModel();
+      console.log(`🤖 Using vision model: ${modelToUse}`);
 
       // Read image file and convert to base64
       const imageBuffer = await fs.readFile(imagePath);
@@ -52,18 +93,33 @@ class OllamaService {
 
       console.log(`📸 Image loaded, size: ${imageBuffer.length} bytes`);
 
-      const prompt = `Please extract all text from this image. Focus on accuracy and preserve the original formatting as much as possible. If the image contains handwritten text, do your best to transcribe it. If there are tables, lists, or structured content, maintain that structure in your response. Only return the extracted text, nothing else.`;
+      // Optimize prompt based on model size
+      const isSmallModel = modelToUse.includes("qwen:7b") || modelToUse.includes("llava:7b") || modelToUse.includes("phi3");
+
+      const prompt = isSmallModel
+        ? `Look at this image. Read every word you see. Write down ALL text exactly as shown. Include names, numbers, dates, and all words. Be very careful and accurate.`
+        : `Please extract all text from this image. Focus on accuracy and preserve the original formatting as much as possible. If the image contains handwritten text, do your best to transcribe it. If there are tables, lists, or structured content, maintain that structure in your response. Only return the extracted text, nothing else.`;
 
       const requestData = {
-        model: this.visionModel,
+        model: modelToUse,
         prompt: prompt,
         images: [base64Image],
         stream: false,
-        options: {
-          temperature: 0.1, // Low temperature for accuracy
-          top_p: 0.9,
-          num_predict: 2000,
-        },
+        options: isSmallModel
+          ? {
+              // Optimized settings for smaller models
+              temperature: 0.1, // Keep low for text extraction accuracy
+              top_p: 0.7, // More focused
+              num_predict: 1500, // Reduced for text extraction
+              repeat_penalty: 1.3, // Higher to avoid repetition
+              top_k: 30, // More focused vocabulary
+            }
+          : {
+              // Original settings for larger models
+              temperature: 0.1,
+              top_p: 0.9,
+              num_predict: 2000,
+            },
       };
 
       console.log(`🌐 Making vision request to: ${this.baseURL}/api/generate`);
@@ -94,6 +150,12 @@ class OllamaService {
     try {
       console.log(`👁️ Starting vision-based document analysis: ${path.basename(imagePath)}`);
 
+      // Find the best available vision model
+      const modelToUse = await this.findBestVisionModel();
+      const isSmallModel = modelToUse.includes("qwen:7b") || modelToUse.includes("llava:7b") || modelToUse.includes("phi3");
+      console.log(`🤖 Using vision model: ${modelToUse} for analysis`);
+      console.log(`🎯 Model optimization: ${isSmallModel ? "Small model - using optimized prompt" : "Large model - using detailed prompt"}`);
+
       // Read image file and convert to base64
       const imageBuffer = await fs.readFile(imagePath);
       const base64Image = imageBuffer.toString("base64");
@@ -103,16 +165,27 @@ class OllamaService {
       const prompt = this.createVisionAnalysisPrompt(documentType);
 
       const requestData = {
-        model: this.visionModel,
+        model: modelToUse,
         prompt: prompt,
         images: [base64Image],
         stream: false,
-        options: {
-          temperature: 0.1, // Lower temperature for more consistent extraction
-          top_p: 0.9,
-          num_predict: 4000, // Increased for more detailed analysis
-          repeat_penalty: 1.1,
-        },
+        options: isSmallModel
+          ? {
+              // Optimized settings for smaller models
+              temperature: 0.2, // Slightly higher for more creativity in text extraction
+              top_p: 0.8, // More focused sampling
+              num_predict: 2000, // Reduced to prevent hallucination
+              repeat_penalty: 1.2, // Higher to avoid repetition
+              top_k: 40, // Limit vocabulary for better focus
+              stop: ["Human:", "Assistant:", "```"], // Stop tokens to prevent unwanted output
+            }
+          : {
+              // Original settings for larger models
+              temperature: 0.1,
+              top_p: 0.9,
+              num_predict: 4000,
+              repeat_penalty: 1.1,
+            },
       };
 
       console.log(`🌐 Making vision analysis request to: ${this.baseURL}/api/generate`);
@@ -127,6 +200,47 @@ class OllamaService {
       const analysis = this.parseAnalysisResponse(response.data.response);
       console.log("✅ Vision-based document analysis completed successfully");
       console.log(`📊 Analysis result:`, JSON.stringify(analysis, null, 2));
+
+      // If small model extracted no text, try llava:latest for better text recognition
+      if (isSmallModel && (!analysis.extractedText || analysis.extractedText.trim().length === 0)) {
+        console.log("⚠️ Small model extracted 0 characters, trying llava:latest for better text recognition");
+
+        // Try with llava:latest if available
+        const availableModels = await this.getAvailableModels();
+        if (availableModels.includes("llava:latest") && modelToUse !== "llava:latest") {
+          console.log("🔄 Retrying with llava:latest model");
+
+          const llavaRequestData = {
+            model: "llava:latest",
+            prompt: prompt,
+            images: [base64Image],
+            stream: false,
+            options: {
+              temperature: 0.1,
+              top_p: 0.9,
+              num_predict: 4000,
+              repeat_penalty: 1.1,
+            },
+          };
+
+          try {
+            const llavaResponse = await axios.post(`${this.baseURL}/api/generate`, llavaRequestData, {
+              timeout: this.timeout,
+              family: 4,
+            });
+
+            const llavaAnalysis = this.parseAnalysisResponse(llavaResponse.data.response);
+
+            if (llavaAnalysis.extractedText && llavaAnalysis.extractedText.trim().length > 0) {
+              console.log("✅ llava:latest successfully extracted text");
+              console.log(`📊 llava:latest Analysis result:`, JSON.stringify(llavaAnalysis, null, 2));
+              return llavaAnalysis;
+            }
+          } catch (llavaError) {
+            console.log("⚠️ llava:latest also failed, continuing with original result");
+          }
+        }
+      }
 
       // Validate that we got meaningful analysis
       if (!analysis.extractedText && !analysis.summary && (!analysis.keyPoints || analysis.keyPoints.length === 0)) {
@@ -147,6 +261,69 @@ class OllamaService {
   }
 
   createVisionAnalysisPrompt(documentType) {
+    // Check if we're using a smaller model that needs a simpler prompt
+    const isSmallModel = this.currentVisionModel.includes("qwen:7b") || this.currentVisionModel.includes("llava:7b") || this.currentVisionModel.includes("phi3");
+
+    if (isSmallModel) {
+      return this.createOptimizedVisionPrompt(documentType);
+    }
+
+    // Use the original complex prompt for larger models
+    return this.createDetailedVisionPrompt(documentType);
+  }
+
+  createOptimizedVisionPrompt(documentType) {
+    return `TASK: Look at this image very carefully and find ALL text.
+
+This is a ${documentType} document image. There IS text in this image that you need to find.
+
+STEP 1: LOOK HARDER - Scan the entire image for:
+- Handwritten text (may be small or faint)
+- Printed text (headers, names, dates)
+- Numbers (account numbers, dates, amounts)
+- Signatures or stamps
+
+STEP 2: READ EVERYTHING - Even if text is:
+- Handwritten and messy
+- Very small
+- Partially visible
+- In different languages
+
+STEP 3: EXTRACT ALL TEXT you can see, even if unclear.
+
+Return this JSON (fill in what you actually see):
+{
+  "documentType": "Meeting Minutes",
+  "extractedText": "WRITE EVERY WORD, NUMBER AND DATE YOU CAN SEE - even if handwritten or unclear. If you see ANY text at all, write it here. Do not say 'no text found'.",
+  "summary": "Brief description of what this document appears to be about",
+  "clientIdentification": {
+    "names": ["Any person names you can read"],
+    "accountNumbers": ["Any numbers that look like accounts: CH1234, IBAN, etc."],
+    "dates": ["Any dates you see: DD.MM.YYYY, YYYY-MM-DD"],
+    "bankingProducts": ["investment", "savings", "checking", "pension"]
+  },
+  "keyPoints": ["What appears to be the main topics"],
+  "clientNeeds": ["What the client seems to need"],
+  "riskAssessment": {
+    "level": "low",
+    "factors": ["Based on what you can read"]
+  },
+  "complianceFlags": [],
+  "suggestedActions": [{
+    "type": "CREATE_CLIENT_NOTE",
+    "priority": "medium", 
+    "description": "Document analysis completed",
+    "data": {
+      "noteContent": "Based on the text I could extract from this document",
+      "category": "follow-up"
+    }
+  }]
+}
+
+CRITICAL: There IS text in this image. Look very carefully. Extract ANY text you can see, even if handwritten, small, or unclear. Do not give up!`;
+  }
+
+  createDetailedVisionPrompt(documentType) {
     return `You are an expert financial advisor assistant analyzing a document image. 
 Please analyze this document image and provide a comprehensive analysis in JSON format.
 

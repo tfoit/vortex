@@ -59,7 +59,6 @@ const AWAITING = {
   RIM_THICKNESS_MAX: 1.4, // perfect ring
 };
 const PARTICLE_SIZE = 1.5;
-const RED_PARTICLE_RATIO = 0.3;
 const BOND_DISTANCE = 15;
 const SPARK_COOLDOWN = 300000;
 const SPARK_FADE_DURATION = 700;
@@ -70,7 +69,6 @@ const ELECTRIC_PARTICLE_COLOR = "#E60000";
 const ELECTRIC_PARTICLE_RATIO = 0.2; // 20% become electric in processing
 const BASE_PARTICLE_COLOR_AWAITING = ""; // blue
 const ELECTRIC_PARTICLE_COLOR_AWAITING = "#FFEA70"; // light blue
-const RIM_ANIMATION_DURATION = 1500; // ms
 
 function randomBetween(a, b) {
   return a + Math.random() * (b - a);
@@ -129,6 +127,12 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
   const timeRef = useRef(0);
   const bondSparkTimes = useRef(new Map());
   const activeSparks = useRef(new Map());
+
+  // Add padding to prevent hard cutoff at edges
+  const PADDING = 40;
+  const canvasWidth = width + PADDING * 2;
+  const canvasHeight = height + PADDING * 2;
+
   // Smooth particle count state
   const [targetCount, setTargetCount] = useState(CALM.PARTICLE_COUNT);
   const [currentCount, setCurrentCount] = useState(CALM.PARTICLE_COUNT);
@@ -227,8 +231,8 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
       RIM_THICKNESS_MAX: lerp3(CALM.RIM_THICKNESS_MAX, PROCESSING.RIM_THICKNESS_MAX, AWAITING.RIM_THICKNESS_MAX, t),
       BOND_DISTANCE: scaledBondDistance, // Add scaled bond distance to params
     };
-    const centerX = width / 2;
-    const centerY = height / 2;
+    const centerX = canvasWidth / 2;
+    const centerY = canvasHeight / 2;
     let oldParticles = particlesRef.current || [];
     let newParticles = oldParticles.slice(0, currentCount);
     if (currentCount > oldParticles.length) {
@@ -242,7 +246,7 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
     let running = true;
 
     function draw(time) {
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
       timeRef.current = time || 0;
       const now = performance.now();
       const particles = particlesRef.current;
@@ -366,9 +370,9 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
       running = false;
       cancelAnimationFrame(animationRef.current);
     };
-  }, [width, height, state, currentCount, scaleFactor, scaledRadius]);
+  }, [width, height, canvasWidth, canvasHeight, state, currentCount, scaleFactor, scaledRadius]);
 
-  return <canvas ref={canvasRef} width={width} height={height} style={{ display: "block", margin: "0 auto", background: "white", borderRadius: "50%" }} aria-label="Vortex animation" />;
+  return <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} style={{ display: "block", margin: "0 auto", background: "transparent", borderRadius: "50%" }} aria-label="Vortex animation" />;
 };
 
 export default VortexAnimation;

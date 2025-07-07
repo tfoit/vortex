@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckCircle, AlertTriangle, ArrowLeft, Play, Loader2, Check, Eye, FileText, User, Calendar, MapPin, Phone, Mail, CreditCard, Building, Globe } from "lucide-react";
+import { CheckCircle, AlertTriangle, ArrowLeft, Play, Loader2, Eye, FileText, User, Calendar, MapPin, Phone, Mail, CreditCard, Building, Globe } from "lucide-react";
 
 import { useSession } from "../context/SessionContext";
 import VortexAnimation from "./VortexAnimation";
@@ -157,7 +157,6 @@ const SessionPage = () => {
   const { loadSession: getSession, executeAction, analyzeDocumentWithVision, loading, error } = useSession();
   const [currentSession, setCurrentSession] = useState(null);
   const [executingActions, setExecutingActions] = useState(new Set());
-  const [visionAnalyzing, setVisionAnalyzing] = useState(false);
   const [clientData, setClientData] = useState(null);
   const [isArchiving, setIsArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState(null);
@@ -239,21 +238,6 @@ const SessionPage = () => {
     }
   };
 
-  const handleVisionAnalysis = async () => {
-    if (!currentSession?.documents?.[0]) return;
-
-    try {
-      setVisionAnalyzing(true);
-      await analyzeDocumentWithVision(sessionId, currentSession.documents[0].id);
-      const updatedSession = await getSession(sessionId);
-      setCurrentSession(updatedSession);
-    } catch (error) {
-      console.error("Vision analysis failed:", error);
-    } finally {
-      setVisionAnalyzing(false);
-    }
-  };
-
   const handleArchive = async () => {
     if (!currentSession?.documents?.[0]) return;
     setIsArchiving(true);
@@ -299,7 +283,7 @@ const SessionPage = () => {
   if (loading && !currentSession) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
-        <VortexAnimation size={100} isActive={true} />
+        <VortexAnimation width={100} height={100} state="processing" />
         <p className="mt-4 text-on-surface-secondary">Loading session...</p>
       </div>
     );

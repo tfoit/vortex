@@ -34,7 +34,7 @@ const DashboardPage = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
-        <VortexAnimation size={100} particleCount={8} isActive={true} />
+        <VortexAnimation width={100} height={100} state="processing" />
         <p className="mt-4 text-on-surface-secondary">Loading dashboard...</p>
       </div>
     );

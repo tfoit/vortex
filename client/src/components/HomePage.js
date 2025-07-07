@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../context/SessionContext";
-import { Menu, X, Clock, CheckCircle, AlertTriangle, Eye, Upload, Camera, TrendingUp } from "lucide-react";
+import { Menu, X, Clock, CheckCircle, AlertTriangle, Eye, Upload, Camera, TrendingUp, Mic } from "lucide-react";
 import CameraCapture from "./CameraCapture";
 import VortexAnimation from "./VortexAnimation";
+import VoiceChat from "./VoiceChat";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ const HomePage = () => {
 
   const [isDragging, setIsDragging] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showVoiceChat, setShowVoiceChat] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [vortexSize, setVortexSize] = useState(400);
 
@@ -236,6 +238,19 @@ const HomePage = () => {
 
   if (showCamera) {
     return <CameraCapture onBack={() => setShowCamera(false)} />;
+  }
+
+  if (showVoiceChat) {
+    return (
+      <VoiceChat
+        onClose={() => setShowVoiceChat(false)}
+        onAccountCreated={(accountData) => {
+          console.log("Account created:", accountData);
+          setShowVoiceChat(false);
+          // Could add success notification here
+        }}
+      />
+    );
   }
 
   return (
@@ -480,13 +495,29 @@ const HomePage = () => {
                   <Camera className="w-4 h-4 mr-2" />
                   Use Camera
                 </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowVoiceChat(true);
+                  }}
+                  className="inline-flex items-center justify-center px-4 sm:px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all duration-200 text-sm sm:text-base"
+                >
+                  <Mic className="w-4 h-4 mr-2" />
+                  Voice Chat
+                </button>
               </div>
               <input id="file-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.txt" onChange={handleFileSelect} />
             </div>
 
-            {/* Supported Formats */}
-            <div className="mt-8 text-center">
+            {/* Supported Options */}
+            <div className="mt-8 text-center space-y-2">
               <p className="text-sm text-gray-500">Supports PDF, images, and handwritten notes</p>
+              <p className="text-xs text-blue-600">
+                <span className="inline-flex items-center space-x-1">
+                  <Mic className="w-3 h-3" />
+                  <span>Voice Chat: Open new bank accounts with AI assistant</span>
+                </span>
+              </p>
             </div>
           </div>
         ) : (
