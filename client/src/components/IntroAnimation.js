@@ -239,23 +239,24 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
         animate={{ scale: logoScale, opacity: logoOpacity }}
         transition={{ duration: 0.3 }}
       >
-        <div className="flex items-center space-x-3">
-          {/* UBS Logo Symbol */}
+        <div className="flex items-center space-x-4">
+          {/* UBS Logo Image */}
           <div className="relative">
-            <svg width="48" height="48" viewBox="0 0 48 48" className="text-red-600">
-              {/* UBS Logo simplified representation */}
-              <rect width="48" height="48" fill="currentColor" rx="4" />
-              <text x="24" y="32" textAnchor="middle" fill="white" fontSize="16" fontWeight="bold" fontFamily="Arial, sans-serif">
-                UBS
-              </text>
-            </svg>
+            <img
+              src="http://localhost:7770/ubs-logo.png"
+              alt="UBS Logo"
+              className="h-16 w-auto object-contain"
+              style={{
+                filter: "drop-shadow(0 4px 8px rgba(230, 0, 0, 0.3))",
+              }}
+            />
 
             {/* Pulsing glow effect */}
             <motion.div
-              className="absolute inset-0 bg-red-600 rounded opacity-20"
+              className="absolute inset-0 bg-red-600 rounded opacity-10 blur-lg"
               animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.2, 0.4, 0.2],
+                scale: [1, 1.3, 1],
+                opacity: [0.1, 0.3, 0.1],
               }}
               transition={{
                 duration: 2,
@@ -267,7 +268,7 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
 
           {/* UBS Text */}
           <motion.div
-            className="text-2xl font-light text-gray-800"
+            className="text-3xl font-light text-gray-800"
             animate={{
               opacity: [1, 0.7, 1],
             }}
