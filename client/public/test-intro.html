@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Intro Animation Test</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: white;
+        font-family: Arial, sans-serif;
+      }
+      #test-container {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+      }
+      .test-button {
+        padding: 10px 20px;
+        background: #e60000;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .test-button:hover {
+        background: #cc0000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="test-container">
+      <button class="test-button" onclick="clearStorage()">Clear Storage & Reload</button>
+    </div>
+
+    <script>
+      function clearStorage() {
+        localStorage.removeItem("vortex-intro-seen");
+        localStorage.removeItem("vortex-skip-intro-dev");
+        window.location.href = "http://localhost:7770";
+      }
+    </script>
+  </body>
+</html>

@@ -60,12 +60,16 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
   const [logoScale, setLogoScale] = useState(1);
   const [logoOpacity, setLogoOpacity] = useState(1);
 
+  console.log("IntroAnimation mounted with dimensions:", width, "x", height);
+
   // Create initial particles
   useEffect(() => {
+    console.log("Creating initial particles...");
     const centerX = width / 2;
     const centerY = height / 2;
 
     particlesRef.current = Array.from({ length: INTRO_CONFIG.PARTICLE_COUNT }, () => createParticle(centerX, centerY, true));
+    console.log("Created", particlesRef.current.length, "particles");
   }, [width, height]);
 
   useEffect(() => {
@@ -83,12 +87,16 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
 
     function updatePhase(elapsed) {
       if (elapsed < INTRO_CONFIG.LOGO_SCALE_DURATION) {
-        setPhase(PHASES.LOGO);
+        if (phase !== PHASES.LOGO) {
+          console.log("Phase: LOGO");
+          setPhase(PHASES.LOGO);
+        }
         // Logo grows and pulses
         const progress = elapsed / INTRO_CONFIG.LOGO_SCALE_DURATION;
         setLogoScale(1 + Math.sin(progress * Math.PI) * 0.1);
       } else if (elapsed < INTRO_CONFIG.LOGO_SCALE_DURATION + INTRO_CONFIG.PARTICLES_EMERGE_DURATION) {
         if (phase !== PHASES.PARTICLES_EMERGE) {
+          console.log("Phase: PARTICLES_EMERGE");
           setPhase(PHASES.PARTICLES_EMERGE);
         }
         // Logo fades as particles emerge
@@ -96,11 +104,13 @@ const IntroAnimation = ({ onComplete, width = 400, height = 400 }) => {
         setLogoOpacity(1 - fadeProgress * 0.8);
       } else if (elapsed < INTRO_CONFIG.LOGO_SCALE_DURATION + INTRO_CONFIG.PARTICLES_EMERGE_DURATION + INTRO_CONFIG.VORTEX_FORM_DURATION) {
         if (phase !== PHASES.FORM_VORTEX) {
+          console.log("Phase: FORM_VORTEX");
           setPhase(PHASES.FORM_VORTEX);
         }
         setLogoOpacity(0.2);
       } else {
         if (phase !== PHASES.COMPLETE) {
+          console.log("Phase: COMPLETE - calling onComplete");
           setPhase(PHASES.COMPLETE);
           setTimeout(() => onComplete && onComplete(), 500);
         }

@@ -62,11 +62,22 @@ function MainApp() {
     const isDevelopment = process.env.NODE_ENV === "development";
     const skipIntroForDev = isDevelopment && localStorage.getItem("vortex-skip-intro-dev") === "true";
 
+    console.log("Intro debug:", {
+      hasSeenIntro,
+      isDevelopment,
+      skipIntroForDev,
+      showIntro,
+      nodeEnv: process.env.NODE_ENV,
+    });
+
     if (hasSeenIntro || skipIntroForDev) {
+      console.log("Skipping intro due to localStorage flags");
       setShowIntro(false);
       setIntroCompleted(true);
+    } else {
+      console.log("Intro should show");
     }
-  }, []);
+  }, [showIntro]);
 
   const handleSkipIntro = () => {
     localStorage.setItem("vortex-intro-seen", "true");
@@ -84,9 +95,10 @@ function MainApp() {
 
   // Show intro animation
   if (showIntro) {
+    console.log("Rendering intro animation");
     return (
       <div className="fixed inset-0 z-50 bg-white">
-        <IntroAnimation width={window.innerWidth} height={window.innerHeight} onComplete={handleIntroComplete} />
+        <IntroAnimation width={typeof window !== "undefined" ? window.innerWidth : 1200} height={typeof window !== "undefined" ? window.innerHeight : 800} onComplete={handleIntroComplete} />
 
         {/* Skip button for returning users */}
         <button onClick={handleSkipIntro} className="absolute top-4 right-4 z-10 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
@@ -109,6 +121,8 @@ function MainApp() {
       </div>
     );
   }
+
+  console.log("Not showing intro, showIntro =", showIntro);
 
   if (appError) {
     return (
