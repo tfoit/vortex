@@ -6,7 +6,7 @@ class OllamaService {
   constructor() {
     this.baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
     this.defaultModel = process.env.OLLAMA_MODEL || "qwen:7b";
-    this.visionModel = process.env.OLLAMA_VISION_MODEL || "qwen:7b";
+    this.visionModel = process.env.OLLAMA_VISION_MODEL || "llava:latest";
     this.timeout = 120000; // 2 minutes for vision processing
 
     // Fallback vision models for M1 Max MacBook Pro (in order of preference)
