@@ -179,10 +179,31 @@ class SessionManager {
         document.archive = archiveInfo;
         session.metadata.lastActivity = new Date().toISOString();
 
+        // Update session-level archive tracking
+        if (!session.metadata.archivedDocuments) {
+          session.metadata.archivedDocuments = 0;
+        }
+        session.metadata.archivedDocuments++;
+        session.metadata.lastArchiveDate = archiveInfo.archivedAt;
+
+        // Add archive to session-level archive list for easy access
+        if (!session.archives) {
+          session.archives = [];
+        }
+        session.archives.push({
+          documentId: documentId,
+          archiveId: archiveInfo.id,
+          filename: archiveInfo.filename,
+          archivedAt: archiveInfo.archivedAt,
+          fileSize: archiveInfo.fileSize,
+          status: archiveInfo.status,
+        });
+
         // Save to persistent storage
         this.saveSessions().catch((err) => console.error("Error saving session:", err));
 
         console.log(`🗄️  Archive info added to document ${documentId} in session ${sessionId}`);
+        console.log(`📊 Session now has ${session.metadata.archivedDocuments} archived documents`);
       }
     }
   }
@@ -195,14 +216,54 @@ class SessionManager {
         session.actionResults = {};
       }
 
-      // Store the action result
-      session.actionResults[actionId] = result;
+      // Store the action result with enhanced tracking
+      session.actionResults[actionId] = {
+        ...result,
+        actionId: actionId,
+        executedAt: new Date().toISOString(),
+        executionStatus: result.success ? "completed" : "failed",
+        actionType: result.auditTrail?.action || "unknown",
+        systemTarget: result.systemInfo?.targetSystem || "unknown",
+      };
+
+      // Update session-level action tracking
+      if (!session.actionStatus) {
+        session.actionStatus = {};
+      }
+
+      // Track individual action status by type and ID
+      session.actionStatus[actionId] = {
+        id: actionId,
+        type: result.auditTrail?.action || "unknown",
+        status: result.success ? "completed" : "failed",
+        executedAt: new Date().toISOString(),
+        systemTarget: result.systemInfo?.targetSystem || "unknown",
+        transactionId: result.systemInfo?.transactionId || null,
+        message: result.message || "Action processed",
+        processingTime: result.systemInfo?.processingTimeMs || 0,
+      };
+
+      // Update metadata counters
+      if (!session.metadata.executedActions) {
+        session.metadata.executedActions = 0;
+      }
+      if (!session.metadata.failedActions) {
+        session.metadata.failedActions = 0;
+      }
+
+      if (result.success) {
+        session.metadata.executedActions++;
+      } else {
+        session.metadata.failedActions++;
+      }
+
       session.metadata.lastActivity = new Date().toISOString();
 
       // Save to persistent storage
       this.saveSessions().catch((err) => console.error("Error saving session:", err));
 
       console.log(`✅ Action result stored for action ${actionId} in session ${sessionId}`);
+      console.log(`📊 Session action stats: ${session.metadata.executedActions || 0} completed, ${session.metadata.failedActions || 0} failed`);
     }
   }
 
@@ -291,13 +352,90 @@ class SessionManager {
       }));
   }
 
+  getSessionActionStatus(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return null;
+    }
+
+    const actionStatus = session.actionStatus || {};
+    const actionResults = session.actionResults || {};
+
+    // Combine action status with suggested actions to provide complete picture
+    const suggestedActions = session.suggestedActions || [];
+
+    const detailedStatus = suggestedActions.map((action) => {
+      const status = actionStatus[action.id];
+      const result = actionResults[action.id];
+
+      return {
+        id: action.id,
+        type: action.type,
+        description: action.description,
+        priority: action.priority,
+        status: status ? status.status : "pending",
+        executedAt: status ? status.executedAt : null,
+        systemTarget: status ? status.systemTarget : action.systemContext?.targetSystem,
+        transactionId: status ? status.transactionId : null,
+        message: status ? status.message : null,
+        processingTime: status ? status.processingTime : null,
+        hasResult: !!result,
+        result: result || null,
+      };
+    });
+
+    return {
+      sessionId: sessionId,
+      totalActions: suggestedActions.length,
+      executedActions: Object.keys(actionStatus).length,
+      completedActions: Object.values(actionStatus).filter((a) => a.status === "completed").length,
+      failedActions: Object.values(actionStatus).filter((a) => a.status === "failed").length,
+      pendingActions: suggestedActions.length - Object.keys(actionStatus).length,
+      actions: detailedStatus,
+      lastExecutionTime: session.metadata.lastActivity,
+    };
+  }
+
   getSessionStats() {
     const sessions = Array.from(this.sessions.values());
+    const totalArchivedDocuments = sessions.reduce((sum, s) => sum + (s.metadata.archivedDocuments || 0), 0);
+    const sessionsWithArchives = sessions.filter((s) => s.metadata.archivedDocuments > 0).length;
+    const totalExecutedActions = sessions.reduce((sum, s) => sum + (s.metadata.executedActions || 0), 0);
+    const totalFailedActions = sessions.reduce((sum, s) => sum + (s.metadata.failedActions || 0), 0);
+    const sessionsWithExecutedActions = sessions.filter((s) => s.metadata.executedActions > 0).length;
+
+    // Calculate action type breakdown
+    const actionTypeStats = {};
+    sessions.forEach((session) => {
+      if (session.actionStatus) {
+        Object.values(session.actionStatus).forEach((action) => {
+          const type = action.type;
+          if (!actionTypeStats[type]) {
+            actionTypeStats[type] = { completed: 0, failed: 0, total: 0 };
+          }
+          actionTypeStats[type].total++;
+          if (action.status === "completed") {
+            actionTypeStats[type].completed++;
+          } else if (action.status === "failed") {
+            actionTypeStats[type].failed++;
+          }
+        });
+      }
+    });
+
     return {
       totalSessions: sessions.length,
       activeSessions: sessions.filter((s) => s.status === "active").length,
       totalDocuments: sessions.reduce((sum, s) => sum + s.metadata.totalDocuments, 0),
       totalActions: sessions.reduce((sum, s) => sum + s.metadata.totalActions, 0),
+      totalArchivedDocuments,
+      sessionsWithArchives,
+      totalExecutedActions,
+      totalFailedActions,
+      sessionsWithExecutedActions,
+      archiveRate: sessions.length > 0 ? Math.round((totalArchivedDocuments / sessions.reduce((sum, s) => sum + s.metadata.totalDocuments, 0)) * 100) : 0,
+      actionExecutionRate: totalExecutedActions + totalFailedActions > 0 ? Math.round((totalExecutedActions / (totalExecutedActions + totalFailedActions)) * 100) : 0,
+      actionTypeStats: actionTypeStats,
     };
   }
 }

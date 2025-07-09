@@ -5,12 +5,12 @@ const path = require("path");
 class OllamaService {
   constructor() {
     this.baseURL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-    this.defaultModel = process.env.OLLAMA_MODEL || "qwen:7b";
-    this.visionModel = process.env.OLLAMA_VISION_MODEL || "llava:latest";
+    this.defaultModel = process.env.OLLAMA_MODEL || "llama3.2-vision:latest";
+    this.visionModel = process.env.OLLAMA_VISION_MODEL || "llama3.2-vision:latest";
     this.timeout = 120000; // 2 minutes for vision processing
 
     // Fallback vision models for M1 Max MacBook Pro (in order of preference)
-    this.fallbackVisionModels = ["llava:latest", "llava:13b", "llava:7b", "bakllava:latest", "llava-llama3:latest", "llava-phi3:latest"];
+    this.fallbackVisionModels = ["llama3.2-vision:latest"];
 
     this.currentVisionModel = this.visionModel;
 
@@ -95,31 +95,34 @@ class OllamaService {
 
       // Optimize prompt based on model size
       const isSmallModel = modelToUse.includes("qwen:7b") || modelToUse.includes("llava:7b") || modelToUse.includes("phi3");
+      const isLlama32Vision = modelToUse.includes("llama3.2-vision");
 
-      const prompt = isSmallModel
-        ? `Look at this image. Read every word you see. Write down ALL text exactly as shown. Include names, numbers, dates, and all words. Be very careful and accurate.`
-        : `Please extract all text from this image. Focus on accuracy and preserve the original formatting as much as possible. If the image contains handwritten text, do your best to transcribe it. If there are tables, lists, or structured content, maintain that structure in your response. Only return the extracted text, nothing else.`;
+      const prompt =
+        isSmallModel && !isLlama32Vision
+          ? `Look at this image. Read every word you see. Write down ALL text exactly as shown. Include names, numbers, dates, and all words. Be very careful and accurate.`
+          : `Please extract all text from this image. Focus on accuracy and preserve the original formatting as much as possible. If the image contains handwritten text, do your best to transcribe it. If there are tables, lists, or structured content, maintain that structure in your response. Only return the extracted text, nothing else.`;
 
       const requestData = {
         model: modelToUse,
         prompt: prompt,
         images: [base64Image],
         stream: false,
-        options: isSmallModel
-          ? {
-              // Optimized settings for smaller models
-              temperature: 0.1, // Keep low for text extraction accuracy
-              top_p: 0.7, // More focused
-              num_predict: 1500, // Reduced for text extraction
-              repeat_penalty: 1.3, // Higher to avoid repetition
-              top_k: 30, // More focused vocabulary
-            }
-          : {
-              // Original settings for larger models
-              temperature: 0.1,
-              top_p: 0.9,
-              num_predict: 2000,
-            },
+        options:
+          isSmallModel && !isLlama32Vision
+            ? {
+                // Optimized settings for smaller models
+                temperature: 0.1, // Keep low for text extraction accuracy
+                top_p: 0.7, // More focused
+                num_predict: 1500, // Reduced for text extraction
+                repeat_penalty: 1.3, // Higher to avoid repetition
+                top_k: 30, // More focused vocabulary
+              }
+            : {
+                // Original settings for larger models and llama3.2-vision
+                temperature: 0.1,
+                top_p: 0.9,
+                num_predict: 2000,
+              },
       };
 
       console.log(`🌐 Making vision request to: ${this.baseURL}/api/generate`);
@@ -153,8 +156,9 @@ class OllamaService {
       // Find the best available vision model
       const modelToUse = await this.findBestVisionModel();
       const isSmallModel = modelToUse.includes("qwen:7b") || modelToUse.includes("llava:7b") || modelToUse.includes("phi3");
+      const isLlama32Vision = modelToUse.includes("llama3.2-vision");
       console.log(`🤖 Using vision model: ${modelToUse} for analysis`);
-      console.log(`🎯 Model optimization: ${isSmallModel ? "Small model - using optimized prompt" : "Large model - using detailed prompt"}`);
+      console.log(`🎯 Model optimization: ${isSmallModel && !isLlama32Vision ? "Small model - using optimized prompt" : "Large model - using detailed prompt"}`);
 
       // Read image file and convert to base64
       const imageBuffer = await fs.readFile(imagePath);
@@ -169,23 +173,24 @@ class OllamaService {
         prompt: prompt,
         images: [base64Image],
         stream: false,
-        options: isSmallModel
-          ? {
-              // Optimized settings for smaller models
-              temperature: 0.2, // Slightly higher for more creativity in text extraction
-              top_p: 0.8, // More focused sampling
-              num_predict: 2000, // Reduced to prevent hallucination
-              repeat_penalty: 1.2, // Higher to avoid repetition
-              top_k: 40, // Limit vocabulary for better focus
-              stop: ["Human:", "Assistant:", "```"], // Stop tokens to prevent unwanted output
-            }
-          : {
-              // Original settings for larger models
-              temperature: 0.1,
-              top_p: 0.9,
-              num_predict: 4000,
-              repeat_penalty: 1.1,
-            },
+        options:
+          isSmallModel && !isLlama32Vision
+            ? {
+                // Optimized settings for smaller models
+                temperature: 0.2, // Slightly higher for more creativity in text extraction
+                top_p: 0.8, // More focused sampling
+                num_predict: 2000, // Reduced to prevent hallucination
+                repeat_penalty: 1.2, // Higher to avoid repetition
+                top_k: 40, // Limit vocabulary for better focus
+                stop: ["Human:", "Assistant:", "```"], // Stop tokens to prevent unwanted output
+              }
+            : {
+                // Original settings for larger models and llama3.2-vision
+                temperature: 0.1,
+                top_p: 0.9,
+                num_predict: 4000,
+                repeat_penalty: 1.1,
+              },
       };
 
       console.log(`🌐 Making vision analysis request to: ${this.baseURL}/api/generate`);
@@ -202,12 +207,13 @@ class OllamaService {
       console.log(`📊 Analysis result:`, JSON.stringify(analysis, null, 2));
 
       // If small model extracted no text, try llava:latest for better text recognition
-      if (isSmallModel && (!analysis.extractedText || analysis.extractedText.trim().length === 0)) {
+      if (isSmallModel && !isLlama32Vision && (!analysis.extractedText || analysis.extractedText.trim().length === 0)) {
         console.log("⚠️ Small model extracted 0 characters, trying llava:latest for better text recognition");
 
         // Try with llava:latest if available
         const availableModels = await this.getAvailableModels();
-        if (availableModels.includes("llava:latest") && modelToUse !== "llava:latest") {
+        const modelNames = availableModels.map((model) => model.name || model);
+        if (modelNames.includes("llava:latest") && modelToUse !== "llava:latest") {
           console.log("🔄 Retrying with llava:latest model");
 
           const llavaRequestData = {
@@ -264,11 +270,14 @@ class OllamaService {
     // Check if we're using a smaller model that needs a simpler prompt
     const isSmallModel = this.currentVisionModel.includes("qwen:7b") || this.currentVisionModel.includes("llava:7b") || this.currentVisionModel.includes("phi3");
 
-    if (isSmallModel) {
+    // llama3.2-vision:latest is a capable model, use detailed prompt
+    const isLlama32Vision = this.currentVisionModel.includes("llama3.2-vision");
+
+    if (isSmallModel && !isLlama32Vision) {
       return this.createOptimizedVisionPrompt(documentType);
     }
 
-    // Use the original complex prompt for larger models
+    // Use the original complex prompt for larger models and llama3.2-vision
     return this.createDetailedVisionPrompt(documentType);
   }
 

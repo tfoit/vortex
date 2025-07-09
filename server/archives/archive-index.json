@@ -23,5 +23,29 @@
       "encryptionLevel": "AES-256",
       "accessLevel": "confidential"
     }
+  },
+  "e4f2aded-7e84-4bd2-8033-f3469be24cf7": {
+    "id": "e4f2aded-7e84-4bd2-8033-f3469be24cf7",
+    "path": "/Users/tfoit/Projekty/Coding Projects/vortex agent/server/archives/archive-e4f2aded-7e84-4bd2-8033-f3469be24cf7-1752038593245.pdf",
+    "filename": "archive-e4f2aded-7e84-4bd2-8033-f3469be24cf7-1752038593245.pdf",
+    "originalFilename": "document-1752038151918-936143185.jpeg",
+    "documentId": "14e2fab4-0476-42cf-a33e-4a59157ed01b",
+    "sessionId": "bace0dd1-4f62-4596-9443-2407ba3faf9f",
+    "clientAdvisorId": "demo_advisor",
+    "documentType": "Advisory Meeting Minutes",
+    "archivedAt": "2025-07-09T05:23:13.245Z",
+    "fileSize": 3846,
+    "extractedText": "Dear [Client Name],\n\nThank you for meeting me today at [Location]. We discussed the following points:\n\n1. Investment portfolio review: I reviewed your investment portfolio and provided an update on market trends and performance. We will schedule a follow-up meeting to discuss any changes in your investment strategy or goals.\n\n2. Address change: You mentioned that you have moved to a new address. Please provide me with the updated ID and proof of address so I can update our records accordingly. I will also need to verify the new address before updating it in our system.\n\n3. Credit request: You expressed interest in obtaining a credit facility for your business expansion plans. I will prepare a structured credit proposal based on your requirements, which we can discuss during our next meeting.\n\n4. Compliance issue: Please ensure that all transactions and account activities comply with Swiss banking regulations and guidelines. We need to maintain strict compliance standards to avoid any potential risks or issues in the future.\n\nPlease let me know if you have any questions or concerns regarding these points. I look forward to our next meeting.\n\nBest regards,\n[Your Name]",
+    "summary": "The document is a handwritten advisory meeting note discussing investment portfolio review, address change, and credit request for a client.",
+    "status": "archived",
+    "retention": {
+      "retentionPeriod": "7 years",
+      "deleteAfter": "2032-07-07T05:23:13.245Z"
+    },
+    "compliance": {
+      "gdprCompliant": true,
+      "encryptionLevel": "AES-256",
+      "accessLevel": "confidential"
+    }
   }
 }

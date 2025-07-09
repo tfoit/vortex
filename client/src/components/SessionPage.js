@@ -361,10 +361,26 @@ const SessionPage = () => {
                 {/* Archive Button Section */}
                 <div className="mt-4">
                   {document.archive ? (
-                    <a href={`${getServerUrl()}/archives/${document.archive.filename}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary w-full text-center">
-                      <Eye className="w-4 h-4" />
-                      View Archived PDF
-                    </a>
+                    <div className="space-y-2">
+                      <a href={`${getServerUrl()}/archives/${document.archive.filename}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary w-full text-center">
+                        <Eye className="w-4 h-4" />
+                        View Archived PDF
+                      </a>
+                      <div className="text-sm text-on-surface-secondary bg-green-50 p-2 rounded">
+                        <div className="flex items-center gap-1 mb-1">
+                          <FileText className="w-3 h-3" />
+                          <span className="font-medium">Archived Successfully</span>
+                        </div>
+                        <div className="text-xs space-y-1">
+                          <div>Archive ID: {document.archive.id}</div>
+                          <div>Archived: {new Date(document.archive.archivedAt).toLocaleString()}</div>
+                          <div>Size: {document.archive.fileSize ? Math.round(document.archive.fileSize / 1024) + " KB" : "Unknown"}</div>
+                          <div>
+                            Status: <span className="text-green-600 font-medium">{document.archive.status}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <button onClick={handleArchive} disabled={isArchiving} className="btn btn-secondary w-full">
                       {isArchiving ? <Loader2 className="animate-spin w-4 h-4" /> : <FileText className="w-4 h-4" />}
@@ -518,7 +534,12 @@ const ActionItem = ({ action, onExecute, isExecuting, isCompleted, executionResu
             <span className="text-xs text-on-surface-secondary">{action.type}</span>
             {action.systemContext && <span className="text-xs text-on-surface-secondary">→ {action.systemContext.targetSystem}</span>}
             {action.systemContext?.estimatedProcessingTime && <span className="text-xs text-on-surface-secondary">⏱ {action.systemContext.estimatedProcessingTime}</span>}
-            {isCompleted && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Completed</span>}
+            {isCompleted && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Completed</span>
+                {executionResult?.uniqueStatus?.actionType && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{executionResult.uniqueStatus.actionType.replace(/_/g, " ")}</span>}
+              </div>
+            )}
           </div>
 
           {/* Execution timestamp and details */}
@@ -528,6 +549,34 @@ const ActionItem = ({ action, onExecute, isExecuting, isCompleted, executionResu
                 <p className="text-green-800 font-medium">{executionResult.message || "Action executed successfully"}</p>
                 {executionResult.systemInfo?.processedAt && <span className="text-xs text-green-600">{new Date(executionResult.systemInfo.processedAt).toLocaleString()}</span>}
               </div>
+
+              {/* Unique Status Information */}
+              {executionResult.uniqueStatus && (
+                <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-xs font-medium text-blue-800 mb-1">Action-Specific Results:</p>
+                  <p className="text-xs text-blue-700">{executionResult.uniqueStatus.specificResult}</p>
+                  {executionResult.uniqueStatus.dataValidation && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Data Validation: <span className="font-medium">{executionResult.uniqueStatus.dataValidation}</span>
+                    </p>
+                  )}
+                  {executionResult.uniqueStatus.completionRate && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Completion Rate: <span className="font-medium">{executionResult.uniqueStatus.completionRate}</span>
+                    </p>
+                  )}
+                  {executionResult.uniqueStatus.urgencyLevel && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Urgency: <span className="font-medium">{executionResult.uniqueStatus.urgencyLevel}</span>
+                    </p>
+                  )}
+                  {executionResult.uniqueStatus.changeImpact && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Impact: <span className="font-medium">{executionResult.uniqueStatus.changeImpact}</span>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* System information */}
               {executionResult.systemInfo && (
@@ -541,6 +590,16 @@ const ActionItem = ({ action, onExecute, isExecuting, isCompleted, executionResu
                   {executionResult.systemInfo.transactionId && (
                     <div className="col-span-2">
                       <span className="font-medium">Transaction ID:</span> {executionResult.systemInfo.transactionId}
+                    </div>
+                  )}
+                  {executionResult.systemInfo.recordsUpdated && (
+                    <div>
+                      <span className="font-medium">Records Updated:</span> {executionResult.systemInfo.recordsUpdated}
+                    </div>
+                  )}
+                  {executionResult.systemInfo.fieldsUpdated && (
+                    <div>
+                      <span className="font-medium">Fields Updated:</span> {executionResult.systemInfo.fieldsUpdated}
                     </div>
                   )}
                 </div>
@@ -564,21 +623,33 @@ const ActionItem = ({ action, onExecute, isExecuting, isCompleted, executionResu
                   <p className="text-xs text-green-600">
                     <span className="font-medium">Audit:</span> {executionResult.auditTrail.action} by {executionResult.auditTrail.performedBy} at {new Date(executionResult.auditTrail.timestamp).toLocaleString()}
                   </p>
+                  {executionResult.auditTrail.details && (
+                    <div className="mt-1">
+                      <p className="text-xs text-green-600">
+                        <span className="font-medium">Details:</span>
+                        {Object.entries(executionResult.auditTrail.details).map(([key, value]) => (
+                          <span key={key} className="ml-2">
+                            {key}: {typeof value === "object" ? JSON.stringify(value) : value}
+                          </span>
+                        ))}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
-      <div className="ml-4">
+
+      <div className="flex-shrink-0 ml-4">
         {isCompleted ? (
           <div className="flex items-center text-green-600">
             <CheckCircle className="w-5 h-5" />
           </div>
         ) : (
-          <button onClick={onExecute} disabled={isExecuting} className="btn btn-primary">
-            {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {isExecuting ? "Executing..." : "Execute"}
+          <button onClick={() => onExecute(action)} disabled={isExecuting} className="btn btn-primary">
+            {isExecuting ? <Loader2 className="animate-spin w-4 h-4" /> : "Execute"}
           </button>
         )}
       </div>

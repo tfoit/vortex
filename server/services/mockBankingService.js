@@ -301,7 +301,7 @@ class MockBankingService {
 
     this.clientNotes.set(noteId, note);
 
-    console.log(`📝 Created client note: ${noteId}`);
+    console.log(`📝 Created client note: ${noteId} for client ${actionData.clientId}`);
 
     // Simulate processing delay
     await this.simulateDelay(500, 1500);
@@ -312,16 +312,17 @@ class MockBankingService {
     return {
       success: true,
       noteId: noteId,
-      message: "Client note created successfully",
+      message: `Client note created successfully - ${note.metadata.wordCount} words documented`,
       data: note,
       systemInfo: {
         targetSystem: "Client Management System",
         processedAt: processingEnd.toISOString(),
         processingTimeMs: processingTime,
         systemStatus: "online",
-        transactionId: `TXN-${noteId.substr(0, 8).toUpperCase()}`,
+        transactionId: `NOTE-${noteId.substr(0, 8).toUpperCase()}`,
         approvalStatus: "auto-approved",
-        nextSteps: ["Note saved to client file", "Advisor notification sent", "Audit trail updated"],
+        recordsUpdated: 1,
+        nextSteps: ["Note saved to client file", "Advisor notification sent", "Audit trail updated", "Client communication log updated"],
       },
       auditTrail: {
         action: "CREATE_CLIENT_NOTE",
@@ -329,6 +330,18 @@ class MockBankingService {
         timestamp: processingEnd.toISOString(),
         ipAddress: "127.0.0.1", // Mock IP
         sessionId: actionData.sessionId || "unknown",
+        details: {
+          noteLength: note.metadata.wordCount,
+          category: note.category,
+          clientId: actionData.clientId,
+        },
+      },
+      uniqueStatus: {
+        actionType: "CLIENT_NOTE_CREATION",
+        specificResult: "Note successfully created and stored in client management system",
+        notificationsSent: ["advisor", "compliance"],
+        dataIntegrity: "verified",
+        backupStatus: "completed",
       },
     };
   }
@@ -351,7 +364,7 @@ class MockBankingService {
 
     this.complianceForms.set(formId, form);
 
-    console.log(`📋 Created compliance form: ${formId} (${form.type})`);
+    console.log(`📋 Created compliance form: ${formId} (${form.type}) - ${form.completionPercentage}% pre-filled`);
 
     // Simulate processing delay
     await this.simulateDelay(1000, 2000);
@@ -362,7 +375,7 @@ class MockBankingService {
     return {
       success: true,
       formId: formId,
-      message: `${form.type} compliance form created and pre-filled`,
+      message: `${form.type} compliance form created and ${form.completionPercentage}% pre-filled from document analysis`,
       data: form,
       nextSteps: ["Review auto-filled information", "Complete missing fields", "Submit for compliance approval"],
       systemInfo: {
@@ -373,7 +386,8 @@ class MockBankingService {
         transactionId: `COMP-${formId.substr(0, 8).toUpperCase()}`,
         approvalStatus: "pending_review",
         completionRate: `${form.completionPercentage}%`,
-        nextSteps: ["Review auto-filled information", "Complete missing fields", "Submit for compliance approval"],
+        formsGenerated: 1,
+        nextSteps: ["Auto-filled data validation completed", "Form queued for advisor review", "Compliance workflow initiated", "Client notification prepared"],
       },
       auditTrail: {
         action: "FILL_COMPLIANCE_FORM",
@@ -381,6 +395,20 @@ class MockBankingService {
         timestamp: processingEnd.toISOString(),
         ipAddress: "127.0.0.1",
         sessionId: actionData.sessionId || "unknown",
+        details: {
+          formType: form.type,
+          completionPercentage: form.completionPercentage,
+          fieldsExtracted: Object.keys(form.extractedData).length,
+          clientId: actionData.clientId,
+        },
+      },
+      uniqueStatus: {
+        actionType: "COMPLIANCE_FORM_GENERATION",
+        specificResult: `${form.type} form generated with ${form.completionPercentage}% completion rate`,
+        validationStatus: "auto-validated",
+        complianceLevel: "standard",
+        reviewRequired: form.completionPercentage < 100,
+        estimatedReviewTime: form.completionPercentage > 80 ? "5-10 minutes" : "15-20 minutes",
       },
     };
   }
@@ -394,6 +422,7 @@ class MockBankingService {
     }
 
     let profile = this.clientProfiles.get(clientId);
+    const isNewProfile = !profile;
 
     if (!profile) {
       // Create new profile if doesn't exist
@@ -409,6 +438,7 @@ class MockBankingService {
 
     // Update profile with new data
     const updates = actionData.data.updates || {};
+    const originalProfile = { ...profile };
     Object.assign(profile, updates, {
       lastUpdated: new Date().toISOString(),
       updatedBy: actionData.advisorId || "system",
@@ -416,7 +446,7 @@ class MockBankingService {
 
     this.clientProfiles.set(clientId, profile);
 
-    console.log(`👤 Updated client profile: ${clientId}`);
+    console.log(`👤 ${isNewProfile ? "Created new" : "Updated"} client profile: ${clientId} - ${Object.keys(updates).length} fields modified`);
 
     // Simulate processing delay
     await this.simulateDelay(300, 800);
@@ -427,7 +457,7 @@ class MockBankingService {
     return {
       success: true,
       clientId: clientId,
-      message: "Client profile updated successfully",
+      message: `Client profile ${isNewProfile ? "created" : "updated"} successfully - ${Object.keys(updates).length} fields modified`,
       data: profile,
       updatedFields: Object.keys(updates),
       systemInfo: {
@@ -438,7 +468,8 @@ class MockBankingService {
         transactionId: `PROF-${clientId.substr(0, 8).toUpperCase()}`,
         approvalStatus: "auto-approved",
         fieldsUpdated: Object.keys(updates).length,
-        nextSteps: ["Profile updated in CRM", "Change notification sent", "Backup created"],
+        profileAction: isNewProfile ? "created" : "updated",
+        nextSteps: [`Profile ${isNewProfile ? "created" : "updated"} in CRM`, "Change notification sent", "Backup created", "Data validation completed", "Compliance check initiated"],
       },
       auditTrail: {
         action: "UPDATE_CLIENT_PROFILE",
@@ -447,6 +478,21 @@ class MockBankingService {
         ipAddress: "127.0.0.1",
         sessionId: actionData.sessionId || "unknown",
         changedFields: Object.keys(updates),
+        details: {
+          clientId: clientId,
+          isNewProfile: isNewProfile,
+          fieldsChanged: Object.keys(updates).length,
+          previousValues: isNewProfile ? {} : originalProfile,
+        },
+      },
+      uniqueStatus: {
+        actionType: "CLIENT_PROFILE_UPDATE",
+        specificResult: `Profile ${isNewProfile ? "creation" : "update"} completed for client ${clientId}`,
+        dataValidation: "passed",
+        complianceStatus: "compliant",
+        syncStatus: "synchronized",
+        changeImpact: Object.keys(updates).length > 3 ? "significant" : "minor",
+        backupCreated: true,
       },
     };
   }
@@ -470,7 +516,8 @@ class MockBankingService {
 
     this.followUps.set(followUpId, followUp);
 
-    console.log(`📅 Scheduled follow-up: ${followUpId} for ${followUp.scheduledDate}`);
+    const daysUntilMeeting = Math.ceil((new Date(followUp.scheduledDate) - new Date()) / (1000 * 60 * 60 * 24));
+    console.log(`📅 Scheduled follow-up: ${followUpId} for ${followUp.scheduledDate} (${daysUntilMeeting} days from now) - ${followUp.meetingType}`);
 
     // Simulate processing delay
     await this.simulateDelay(200, 600);
@@ -481,11 +528,12 @@ class MockBankingService {
     return {
       success: true,
       followUpId: followUpId,
-      message: "Follow-up meeting scheduled successfully",
+      message: `Follow-up meeting scheduled successfully for ${followUp.scheduledDate} (${daysUntilMeeting} days from now)`,
       data: followUp,
       calendarInvite: {
         sent: true,
         recipientEmail: this.getClientEmail(followUp.clientId),
+        meetingLink: followUp.meetingType === "virtual" ? `https://meeting.ubs.com/join/${followUpId}` : null,
       },
       systemInfo: {
         targetSystem: "Calendar & CRM System",
@@ -495,7 +543,9 @@ class MockBankingService {
         transactionId: `MEET-${followUpId.substr(0, 8).toUpperCase()}`,
         approvalStatus: "auto-approved",
         meetingDate: followUp.scheduledDate,
-        nextSteps: ["Calendar invite sent", "Reminder set", "Client notified"],
+        daysUntilMeeting: daysUntilMeeting,
+        meetingsScheduled: 1,
+        nextSteps: ["Calendar invite sent to client", "Advisor calendar updated", "Reminder notifications set", "Meeting preparation checklist created", "Client notification email sent"],
       },
       auditTrail: {
         action: "SCHEDULE_FOLLOW_UP",
@@ -503,6 +553,22 @@ class MockBankingService {
         timestamp: processingEnd.toISOString(),
         ipAddress: "127.0.0.1",
         sessionId: actionData.sessionId || "unknown",
+        details: {
+          clientId: actionData.clientId,
+          meetingType: followUp.meetingType,
+          scheduledDate: followUp.scheduledDate,
+          priority: followUp.priority,
+          purpose: followUp.purpose,
+        },
+      },
+      uniqueStatus: {
+        actionType: "FOLLOW_UP_SCHEDULING",
+        specificResult: `${followUp.meetingType} meeting scheduled for ${followUp.scheduledDate}`,
+        calendarIntegration: "synchronized",
+        notificationStatus: "sent",
+        reminderStatus: "active",
+        urgencyLevel: daysUntilMeeting <= 7 ? "urgent" : daysUntilMeeting <= 14 ? "normal" : "low",
+        preparationTime: `${daysUntilMeeting} days available`,
       },
     };
   }

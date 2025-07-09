@@ -7,6 +7,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 require("dotenv").config();
+const { v4: uuidv4 } = require("uuid");
 
 const { SessionManager } = require("./services/sessionManager");
 const { DocumentProcessor } = require("./services/documentProcessor");
@@ -757,6 +758,11 @@ app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, r
       return res.status(404).json({ error: "Document not found" });
     }
 
+    // Check if document is already archived
+    if (document.archive) {
+      return res.status(400).json({ error: "Document is already archived" });
+    }
+
     // --- PDF Creation Logic ---
     const pdfDoc = await PDFDocument.create();
     let page = pdfDoc.addPage();
@@ -798,76 +804,19 @@ app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, r
 
     const metadata = [
       `Document ID: ${document.id}`,
+      `Session ID: ${sessionId}`,
       `Original Filename: ${document.filename}`,
       `File Size: ${document.size ? Math.round(document.size / 1024) + " KB" : "Unknown"}`,
       `MIME Type: ${document.mimetype}`,
       `Uploaded: ${new Date(document.uploadedAt).toLocaleString()}`,
       `Archived: ${new Date().toLocaleString()}`,
+      `Client Advisor: ${session.clientAdvisorId || "Unknown"}`,
     ];
 
     for (const line of metadata) {
       checkAndAddPage();
-      page.drawText(line, { x: 50, y, font, size: fontSize, color: rgb(0, 0, 0) });
-      y -= 18;
-    }
-
-    y -= 20;
-
-    // If it's an image, embed it
-    if (document.mimetype.startsWith("image/")) {
-      try {
-        checkAndAddPage(300);
-        page.drawText("Document Preview", {
-          x: 50,
-          y,
-          font: boldFont,
-          size: headerSize,
-          color: rgb(0, 0, 0),
-        });
-        y -= 30;
-
-        const imageBytes = await fs.readFile(document.path);
-        let image;
-
-        // Handle different image formats
-        if (document.mimetype.includes("png")) {
-          image = await pdfDoc.embedPng(imageBytes);
-        } else if (document.mimetype.includes("jpeg") || document.mimetype.includes("jpg")) {
-          image = await pdfDoc.embedJpg(imageBytes);
-        } else {
-          // Fallback for other formats
-          console.log(`⚠️ Unsupported image format: ${document.mimetype}, skipping image embed`);
-        }
-
-        if (image) {
-          // Scale image to fit page while maintaining aspect ratio
-          const maxWidth = width - 100;
-          const maxHeight = 400;
-          const imageScale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
-          const scaledWidth = image.width * imageScale;
-          const scaledHeight = image.height * imageScale;
-
-          checkAndAddPage(scaledHeight + 20);
-          page.drawImage(image, {
-            x: 50,
-            y: y - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          });
-          y -= scaledHeight + 30;
-        }
-      } catch (imageError) {
-        console.error("Error embedding image:", imageError);
-        checkAndAddPage();
-        page.drawText("Error: Could not embed image preview", {
-          x: 50,
-          y,
-          font,
-          size: fontSize,
-          color: rgb(0.8, 0, 0),
-        });
-        y -= 20;
-      }
+      page.drawText(line, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+      y -= 16;
     }
 
     // Add Analysis section
@@ -913,6 +862,32 @@ app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, r
         y -= 10;
       }
 
+      // Client Identification
+      if (document.analysis.clientIdentification) {
+        checkAndAddPage(50);
+        page.drawText("Client Identification:", { x: 50, y, font: boldFont, size: fontSize, color: rgb(0, 0, 0) });
+        y -= 20;
+
+        const clientId = document.analysis.clientIdentification;
+        if (clientId.names && clientId.names.length > 0) {
+          page.drawText(`Names: ${clientId.names.join(", ")}`, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+          y -= 16;
+        }
+        if (clientId.accountNumbers && clientId.accountNumbers.length > 0) {
+          page.drawText(`Account Numbers: ${clientId.accountNumbers.join(", ")}`, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+          y -= 16;
+        }
+        if (clientId.location) {
+          page.drawText(`Location: ${clientId.location}`, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+          y -= 16;
+        }
+        if (clientId.financialAmounts && clientId.financialAmounts.length > 0) {
+          page.drawText(`Financial Amounts: ${clientId.financialAmounts.join(", ")}`, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+          y -= 16;
+        }
+        y -= 10;
+      }
+
       // Extracted Text
       if (document.analysis.extractedText) {
         checkAndAddPage();
@@ -950,6 +925,24 @@ app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, r
             }
           }
         }
+        y -= 10;
+      }
+
+      // Suggested Actions
+      if (document.analysis.suggestedActions && document.analysis.suggestedActions.length > 0) {
+        checkAndAddPage(50);
+        page.drawText("Suggested Actions:", { x: 50, y, font: boldFont, size: fontSize, color: rgb(0, 0, 0) });
+        y -= 20;
+
+        for (const action of document.analysis.suggestedActions) {
+          checkAndAddPage();
+          page.drawText(`• ${action.type}: ${action.description}`, { x: 60, y, font, size: fontSize, color: rgb(0, 0, 0) });
+          y -= 16;
+          if (action.priority) {
+            page.drawText(`  Priority: ${action.priority}`, { x: 70, y, font, size: fontSize - 1, color: rgb(0.4, 0.4, 0.4) });
+            y -= 14;
+          }
+        }
       }
     } else {
       checkAndAddPage();
@@ -963,28 +956,203 @@ app.post("/api/sessions/:sessionId/documents/:documentId/archive", async (req, r
       y -= 20;
     }
 
+    // Generate PDF
     const pdfBytes = await pdfDoc.save();
-    const archiveFilename = `archive-${document.id}-${Date.now()}.pdf`;
+    const archiveId = uuidv4();
+    const archiveFilename = `archive-${archiveId}-${Date.now()}.pdf`;
     const archivePath = path.join(archivesDir, archiveFilename);
 
+    // Save PDF file
     await fs.writeFile(archivePath, pdfBytes);
 
-    // Update session data
+    // Create comprehensive archive info
     const archiveInfo = {
+      id: archiveId,
       path: archivePath,
       filename: archiveFilename,
+      originalFilename: document.filename,
+      documentId: documentId,
+      sessionId: sessionId,
+      clientAdvisorId: session.clientAdvisorId,
+      documentType: document.analysis?.documentType || "Unknown",
       archivedAt: new Date().toISOString(),
+      fileSize: pdfBytes.length,
+      extractedText: document.analysis?.extractedText || null,
+      summary: document.analysis?.summary || null,
+      status: "archived",
+      retention: {
+        retentionPeriod: "7 years",
+        deleteAfter: new Date(Date.now() + 7 * 365 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      compliance: {
+        gdprCompliant: true,
+        encryptionLevel: "AES-256",
+        accessLevel: "confidential",
+      },
     };
-    sessionManager.addArchiveToDocument(sessionId, documentId, archiveInfo);
+
+    // Update archive index
+    const archiveIndexPath = path.join(archivesDir, "archive-index.json");
+    let archiveIndex = {};
+
+    try {
+      const indexData = await fs.readFile(archiveIndexPath, "utf8");
+      archiveIndex = JSON.parse(indexData);
+    } catch (error) {
+      // File doesn't exist or is invalid, start with empty index
+      console.log("📂 Creating new archive index file");
+    }
+
+    archiveIndex[archiveId] = archiveInfo;
+    await fs.writeFile(archiveIndexPath, JSON.stringify(archiveIndex, null, 2));
+
+    // Update session with archive info
+    const sessionArchiveInfo = {
+      id: archiveId,
+      path: archivePath,
+      filename: archiveFilename,
+      archivedAt: archiveInfo.archivedAt,
+      fileSize: archiveInfo.fileSize,
+      status: "archived",
+    };
+
+    sessionManager.addArchiveToDocument(sessionId, documentId, sessionArchiveInfo);
+
+    // Update session metadata to track archives
+    const sessionData = sessionManager.getSession(sessionId);
+    if (sessionData) {
+      sessionData.metadata.archivedDocuments = (sessionData.metadata.archivedDocuments || 0) + 1;
+      sessionData.metadata.lastArchiveDate = archiveInfo.archivedAt;
+    }
 
     console.log(`✅ Document archived successfully: ${archiveFilename}`);
+    console.log(`📂 Archive ID: ${archiveId}`);
+    console.log(`🗄️  Archive index updated with ${Object.keys(archiveIndex).length} total archives`);
+
     res.json({
+      success: true,
       message: "Document archived successfully",
-      archiveInfo,
+      archiveInfo: sessionArchiveInfo,
+      archiveId: archiveId,
+      metadata: {
+        totalArchives: Object.keys(archiveIndex).length,
+        archiveSize: `${Math.round(archiveInfo.fileSize / 1024)} KB`,
+        retentionPeriod: archiveInfo.retention.retentionPeriod,
+      },
     });
   } catch (error) {
     console.error("❌ Error archiving document:", error);
     res.status(500).json({ error: "Failed to archive document", details: error.message });
+  }
+});
+
+// Get archive statistics
+app.get("/api/archives/stats", async (req, res) => {
+  try {
+    const archiveIndexPath = path.join(archivesDir, "archive-index.json");
+    let archiveIndex = {};
+
+    try {
+      const indexData = await fs.readFile(archiveIndexPath, "utf8");
+      archiveIndex = JSON.parse(indexData);
+    } catch (error) {
+      // No archives yet
+    }
+
+    const archives = Object.values(archiveIndex);
+    const totalSize = archives.reduce((sum, archive) => sum + (archive.fileSize || 0), 0);
+    const sessionStats = sessionManager.getSessionStats();
+
+    const stats = {
+      totalArchives: archives.length,
+      totalSizeBytes: totalSize,
+      totalSizeMB: Math.round((totalSize / (1024 * 1024)) * 100) / 100,
+      oldestArchive: archives.length > 0 ? archives.reduce((oldest, archive) => (new Date(archive.archivedAt) < new Date(oldest.archivedAt) ? archive : oldest)).archivedAt : null,
+      newestArchive: archives.length > 0 ? archives.reduce((newest, archive) => (new Date(archive.archivedAt) > new Date(newest.archivedAt) ? archive : newest)).archivedAt : null,
+      documentTypes: archives.reduce((types, archive) => {
+        const type = archive.documentType || "Unknown";
+        types[type] = (types[type] || 0) + 1;
+        return types;
+      }, {}),
+      sessionStats: sessionStats,
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error("❌ Error getting archive stats:", error);
+    res.status(500).json({ error: "Failed to get archive statistics" });
+  }
+});
+
+// Get all archives
+app.get("/api/archives", async (req, res) => {
+  try {
+    const archiveIndexPath = path.join(archivesDir, "archive-index.json");
+    let archiveIndex = {};
+
+    try {
+      const indexData = await fs.readFile(archiveIndexPath, "utf8");
+      archiveIndex = JSON.parse(indexData);
+    } catch (error) {
+      // No archives yet
+    }
+
+    const archives = Object.values(archiveIndex);
+
+    // Sort by archived date (newest first)
+    archives.sort((a, b) => new Date(b.archivedAt) - new Date(a.archivedAt));
+
+    res.json({
+      archives,
+      total: archives.length,
+    });
+  } catch (error) {
+    console.error("❌ Error getting archives:", error);
+    res.status(500).json({ error: "Failed to get archives" });
+  }
+});
+
+// Get detailed action status for a session
+app.get("/api/sessions/:sessionId/actions/status", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const actionStatus = sessionManager.getSessionActionStatus(sessionId);
+    if (!actionStatus) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    res.json(actionStatus);
+  } catch (error) {
+    console.error("❌ Error getting session action status:", error);
+    res.status(500).json({ error: "Failed to get session action status" });
+  }
+});
+
+// Get archives for a specific session
+app.get("/api/sessions/:sessionId/archives", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = sessionManager.getSession(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const archives = session.archives || [];
+
+    res.json({
+      sessionId,
+      archives,
+      total: archives.length,
+      metadata: {
+        archivedDocuments: session.metadata.archivedDocuments || 0,
+        lastArchiveDate: session.metadata.lastArchiveDate || null,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error getting session archives:", error);
+    res.status(500).json({ error: "Failed to get session archives" });
   }
 });
 

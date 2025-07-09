@@ -245,6 +245,28 @@ class ApiService {
     return response.data;
   }
 
+  // Archive management methods
+  async getArchiveStats() {
+    const response = await this.client.get("/archives/stats");
+    return response.data;
+  }
+
+  async getAllArchives() {
+    const response = await this.client.get("/archives");
+    return response.data;
+  }
+
+  async getSessionArchives(sessionId) {
+    const response = await this.client.get(`/sessions/${sessionId}/archives`);
+    return response.data;
+  }
+
+  // Action status methods
+  async getSessionActionStatus(sessionId) {
+    const response = await this.client.get(`/sessions/${sessionId}/actions/status`);
+    return response.data;
+  }
+
   async processImageCapture(sessionId, imageData) {
     const response = await this.client.post(`/sessions/${sessionId}/capture`, {
       imageData,
