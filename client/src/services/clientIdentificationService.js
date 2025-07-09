@@ -106,6 +106,31 @@ class ClientIdentificationService {
         lastContact: "2025-06-25",
         status: "active",
       },
+      {
+        id: "client_005",
+        name: "Document Client",
+        firstName: "Document",
+        lastName: "Client",
+        clientIdentificationNumber: "CIN-DC-2025-001",
+        email: "document.client@email.com",
+        phone: "+41 31 987 6543",
+        birthdate: "1975-08-12",
+        nationality: "Swiss",
+        preferredLanguage: "German",
+        address: {
+          street: "Bundesplatz 15",
+          city: "Bern",
+          postalCode: "3003",
+          country: "Switzerland",
+        },
+        accounts: [
+          { type: "checking", accountNumber: "CH10501 1113 4597 1100 0", iban: "CH10 5011 1345 9711 0000 0", balance: 3200000.0, currency: "CHF", openedDate: "2018-03-20" },
+          { type: "investment", accountNumber: "CH10501 1113 4597 1100 1", iban: "CH10 5011 1345 9711 0010 0", balance: 25000000.0, currency: "CHF", openedDate: "2018-03-20" },
+        ],
+        riskProfile: "high",
+        lastContact: "2025-01-11",
+        status: "active",
+      },
     ];
   }
 

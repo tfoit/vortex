@@ -273,67 +273,99 @@ class OllamaService {
   }
 
   createOptimizedVisionPrompt(documentType) {
-    return `TASK: Look at this image very carefully and find ALL text.
+    return `TASK: You are an expert financial advisor assistant analyzing a handwritten document image. Look at this image very carefully and find ALL text.
 
 This is a ${documentType} document image. There IS text in this image that you need to find.
 
-STEP 1: LOOK HARDER - Scan the entire image for:
-- Handwritten text (may be small or faint)
-- Printed text (headers, names, dates)
-- Numbers (account numbers, dates, amounts)
-- Signatures or stamps
-- Address information (street, city, postal code, country)
+STEP 1: HANDWRITTEN TEXT ANALYSIS - Scan the entire image for:
+- Handwritten text (may be cursive, print, or mixed styles)
+- Location and date information (e.g., "Bern, 11.01.2025")
+- Swiss account numbers (format: CH followed by numbers like "CH10501 1113 4597 1100 0")
+- Client names (first names, last names, full names)
+- Financial amounts (millions CHF, CHF amounts, percentages)
+- Banking products (yacht, investment, credit, loan, mortgage, savings)
+- Action items and recommendations
+- Meeting notes and observations
 
-STEP 2: READ EVERYTHING - Even if text is:
-- Handwritten and messy
-- Very small
-- Partially visible
-- In different languages
+STEP 2: SWISS BANKING CONTEXT - Pay special attention to:
+- Swiss account format: CH followed by 5 digits, then groups of 4 digits
+- Swiss currency: CHF, millions CHF, thousands CHF
+- Swiss locations: Bern, Zurich, Geneva, Basel
+- Swiss date format: DD.MM.YYYY (e.g., 11.01.2025)
+- German/French banking terms mixed with English
 
-STEP 3: EXTRACT ALL TEXT you can see, even if unclear.
+STEP 3: FINANCIAL ADVISORY CONTEXT - Look for:
+- Client requests (wants to buy, needs financing)
+- Capital requirements (estimated amounts needed)
+- Recommendations (should start, prepare, organize)
+- Risk assessments and compliance notes
+- Follow-up actions and next steps
+
+STEP 4: EXTRACT ALL TEXT you can see, even if unclear or partially visible.
 
 Return this JSON (fill in what you actually see):
 {
-  "documentType": "Meeting Minutes",
-  "extractedText": "WRITE EVERY WORD, NUMBER AND DATE YOU CAN SEE - even if handwritten or unclear. If you see ANY text at all, write it here. Do not say 'no text found'.",
-  "summary": "Brief description of what this document appears to be about",
+  "documentType": "Advisory Meeting Minutes",
+  "extractedText": "WRITE EVERY WORD, NUMBER AND DATE YOU CAN SEE - transcribe the handwritten text exactly as it appears. Include location, dates, account numbers, amounts, client needs, recommendations, and action items. Do not say 'no text found'.",
+  "summary": "Brief description of what this advisory meeting was about",
   "clientIdentification": {
-    "names": ["Any person names you can read"],
-    "accountNumbers": ["Any numbers that look like accounts: CH1234, IBAN, etc."],
-    "dates": ["Any dates you see: DD.MM.YYYY, YYYY-MM-DD"],
-    "bankingProducts": ["investment", "savings", "checking", "pension"],
-    "addressInfo": {
-      "oldAddress": "Previous address if mentioned",
-      "newAddress": "New address if mentioned", 
-      "addressChangeIndicators": ["moved", "relocated", "new address", "address change"]
-    }
+    "names": ["Any person names you can read from the handwritten text"],
+    "accountNumbers": ["Swiss account numbers in format CH##### #### #### #### #"],
+    "dates": ["Meeting date and any other dates: DD.MM.YYYY format"],
+    "bankingProducts": ["yacht", "investment", "credit", "loan", "mortgage", "savings", "pension"],
+    "financialAmounts": ["Any amounts mentioned: X millions CHF, X thousand CHF"],
+    "location": "Meeting location if mentioned (e.g., Bern, Zurich)"
   },
-  "keyPoints": ["What appears to be the main topics"],
-  "clientNeeds": ["What the client seems to need"],
+  "keyPoints": ["Main discussion topics from the handwritten notes"],
+  "clientNeeds": ["What the client wants or needs based on the notes"],
+  "recommendations": ["Advisor recommendations from the notes"],
   "riskAssessment": {
-    "level": "low",
-    "factors": ["Based on what you can read"]
+    "level": "low|medium|high",
+    "factors": ["Risk factors based on the content"]
   },
-  "complianceFlags": [],
+  "complianceFlags": ["Any compliance concerns from large amounts or unusual requests"],
   "suggestedActions": [{
     "type": "CREATE_CLIENT_NOTE",
-    "priority": "medium", 
-    "description": "Document analysis completed",
+    "priority": "high|medium|low", 
+    "description": "Based on the handwritten action items",
     "data": {
-      "noteContent": "Based on the text I could extract from this document",
-      "category": "follow-up"
+      "noteContent": "Detailed note based on the meeting content",
+      "category": "follow-up|investment|credit|compliance"
+    }
+  }, {
+    "type": "ORGANIZE_FOLLOW_UP",
+    "priority": "high|medium|low",
+    "description": "Schedule follow-up as noted in the document",
+    "data": {
+      "purpose": "Continue discussion about client needs",
+      "meetingType": "in-person|video|phone"
     }
   }]
 }
 
-CRITICAL: There IS text in this image. Look very carefully. Extract ANY text you can see, even if handwritten, small, or unclear. Do not give up!`;
+CRITICAL INSTRUCTIONS:
+- There IS handwritten text in this image
+- Look very carefully at every part of the image
+- Handwritten text may be cursive, printed, or mixed
+- Extract account numbers exactly as written (CH##### #### #### #### #)
+- Pay attention to financial amounts (millions CHF, etc.)
+- Note any action items or recommendations
+- Swiss banking context is important
+- Do not give up - there is definitely text to extract!`;
   }
 
   createDetailedVisionPrompt(documentType) {
-    return `You are an expert financial advisor assistant analyzing a document image. 
+    return `You are an expert Swiss financial advisor assistant analyzing a handwritten document image. 
 Please analyze this document image and provide a comprehensive analysis in JSON format.
 
 Document Type Context: ${documentType}
+
+HANDWRITTEN TEXT ANALYSIS INSTRUCTIONS:
+- This is likely a handwritten advisory meeting note
+- Look for Swiss banking context (CH account numbers, CHF amounts, Swiss locations)
+- Pay attention to client requests, financial amounts, and recommendations
+- Extract action items and follow-up plans
+- Note any compliance or risk factors from large amounts
 
 Please examine the image and provide your analysis in the following JSON structure:
 {
@@ -342,9 +374,11 @@ Please examine the image and provide your analysis in the following JSON structu
   "summary": "Brief summary of the document content and purpose",
   "clientIdentification": {
     "names": ["List all person names found in the document"],
-    "accountNumbers": ["List all account numbers, IBANs, or banking references found"],
-    "dates": ["List all dates found, especially birth dates or account opening dates"],
-    "bankingProducts": ["List any banking products mentioned (checking, savings, investment, pension, etc.)"],
+    "accountNumbers": ["List all Swiss account numbers (CH##### #### #### #### #)"],
+    "dates": ["List all dates found (DD.MM.YYYY format), especially meeting dates"],
+    "bankingProducts": ["List any banking products mentioned (yacht, investment, credit, loan, mortgage, savings, pension, etc.)"],
+    "financialAmounts": ["List all financial amounts mentioned (X millions CHF, X thousand CHF, etc.)"],
+    "location": "Meeting location if mentioned (e.g., Bern, Zurich, Geneva)",
     "addressInfo": {
       "oldAddress": "Previous address if address change is mentioned",
       "newAddress": "New address if address change is mentioned",
@@ -353,6 +387,7 @@ Please examine the image and provide your analysis in the following JSON structu
   },
   "keyPoints": ["key point 1", "key point 2", "key point 3"],
   "clientNeeds": ["identified need 1", "identified need 2"],
+  "recommendations": ["advisor recommendation 1", "advisor recommendation 2"],
   "riskAssessment": {
     "level": "low|medium|high",
     "factors": ["risk factor 1", "risk factor 2"]
@@ -388,6 +423,25 @@ Please examine the image and provide your analysis in the following JSON structu
         "suggestedDate": "YYYY-MM-DD",
         "purpose": "Purpose of follow-up based on document content",
         "meetingType": "in-person|video|phone"
+      }
+    },
+    {
+      "type": "ORGANIZE_FOLLOW_UP",
+      "priority": "high|medium|low",
+      "description": "Organize follow-up meeting as noted in handwritten actions",
+      "data": {
+        "purpose": "Continue discussion about client needs and next steps",
+        "meetingType": "in-person|video|phone"
+      }
+    },
+    {
+      "type": "PREPARE_CREDIT_PROPOSAL",
+      "priority": "high|medium|low",
+      "description": "Prepare structured credit proposal for large financing needs",
+      "data": {
+        "amount": "Required financing amount",
+        "purpose": "Financing purpose (yacht, investment, etc.)",
+        "clientProfile": "Client risk and financial profile"
       }
     }
   ]
