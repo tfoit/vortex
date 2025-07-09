@@ -120,7 +120,7 @@ function createParticles(centerX, centerY, params, count, electricMode = false) 
  * VortexAnimation
  * @param {"calm"|"processing"|"awaiting"} state - Animation state: calm, processing, or awaiting.
  */
-const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
+const VortexAnimation = ({ width = 480, height = 480, state = "calm" }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef();
   const particlesRef = useRef();
@@ -128,10 +128,9 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
   const bondSparkTimes = useRef(new Map());
   const activeSparks = useRef(new Map());
 
-  // Add padding to prevent hard cutoff at edges
-  const PADDING = 40;
-  const canvasWidth = width + PADDING * 2;
-  const canvasHeight = height + PADDING * 2;
+  // Use exact dimensions without padding to fit the intended area
+  const canvasWidth = width;
+  const canvasHeight = height;
 
   // Smooth particle count state
   const [targetCount, setTargetCount] = useState(CALM.PARTICLE_COUNT);
@@ -141,7 +140,8 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
   // Calculate scale factor based on canvas size for responsive vortex sizing
   // Use 400 as base reference size (desktop), with minimum scale of 0.6 to prevent too small vortex
   const scaleFactor = Math.max(0.6, Math.min(width, height) / 400);
-  const scaledRadius = 180 * scaleFactor; // Scale the base radius of 180
+  // Reduce the radius to ensure particles don't get clipped at edges and fit comfortably
+  const scaledRadius = Math.min(width, height) * 0.28; // Use 28% of the canvas size for radius
 
   // Helper to interpolate between three states
   function lerp3(a, b, c, t) {
@@ -215,8 +215,8 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
     const params = {
       ANGULAR_SPEED: lerp3(CALM.ANGULAR_SPEED, PROCESSING.ANGULAR_SPEED, AWAITING.ANGULAR_SPEED, t),
       SPIRAL_SPEED: lerp3(CALM.SPIRAL_SPEED, PROCESSING.SPIRAL_SPEED, AWAITING.SPIRAL_SPEED, t),
-      OSC_AMP_MIN: lerp3(CALM.OSC_AMP_MIN, PROCESSING.OSC_AMP_MIN, AWAITING.OSC_AMP_MIN, t) * scaleFactor,
-      OSC_AMP_MAX: lerp3(CALM.OSC_AMP_MAX, PROCESSING.OSC_AMP_MAX, AWAITING.OSC_AMP_MAX, t) * scaleFactor,
+      OSC_AMP_MIN: lerp3(CALM.OSC_AMP_MIN, PROCESSING.OSC_AMP_MIN, AWAITING.OSC_AMP_MIN, t) * scaleFactor * 0.7,
+      OSC_AMP_MAX: lerp3(CALM.OSC_AMP_MAX, PROCESSING.OSC_AMP_MAX, AWAITING.OSC_AMP_MAX, t) * scaleFactor * 0.7,
       SPARK_PROBABILITY: lerp3(CALM.SPARK_PROBABILITY, PROCESSING.SPARK_PROBABILITY, AWAITING.SPARK_PROBABILITY, t),
       SPARK_LIMIT: Math.round(lerp3(CALM.SPARK_LIMIT, PROCESSING.SPARK_LIMIT, AWAITING.SPARK_LIMIT, t)),
       RED_PARTICLE_RATIO: lerp3(CALM.RED_PARTICLE_RATIO, PROCESSING.RED_PARTICLE_RATIO, AWAITING.RED_PARTICLE_RATIO, t),
@@ -372,7 +372,7 @@ const VortexAnimation = ({ width = 320, height = 320, state = "calm" }) => {
     };
   }, [width, height, canvasWidth, canvasHeight, state, currentCount, scaleFactor, scaledRadius]);
 
-  return <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} style={{ display: "block", margin: "0 auto", background: "transparent", borderRadius: "50%" }} aria-label="Vortex animation" />;
+  return <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} style={{ display: "block", margin: "0 auto", background: "transparent" }} aria-label="Vortex animation" />;
 };
 
 export default VortexAnimation;

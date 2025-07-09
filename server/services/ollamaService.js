@@ -282,6 +282,7 @@ STEP 1: LOOK HARDER - Scan the entire image for:
 - Printed text (headers, names, dates)
 - Numbers (account numbers, dates, amounts)
 - Signatures or stamps
+- Address information (street, city, postal code, country)
 
 STEP 2: READ EVERYTHING - Even if text is:
 - Handwritten and messy
@@ -300,7 +301,12 @@ Return this JSON (fill in what you actually see):
     "names": ["Any person names you can read"],
     "accountNumbers": ["Any numbers that look like accounts: CH1234, IBAN, etc."],
     "dates": ["Any dates you see: DD.MM.YYYY, YYYY-MM-DD"],
-    "bankingProducts": ["investment", "savings", "checking", "pension"]
+    "bankingProducts": ["investment", "savings", "checking", "pension"],
+    "addressInfo": {
+      "oldAddress": "Previous address if mentioned",
+      "newAddress": "New address if mentioned", 
+      "addressChangeIndicators": ["moved", "relocated", "new address", "address change"]
+    }
   },
   "keyPoints": ["What appears to be the main topics"],
   "clientNeeds": ["What the client seems to need"],
@@ -332,13 +338,18 @@ Document Type Context: ${documentType}
 Please examine the image and provide your analysis in the following JSON structure:
 {
   "documentType": "Classify the document (e.g., 'Advisory Meeting Minutes', 'Client Portfolio Review', 'Financial Report', 'Handwritten Notes', 'Form', etc.)",
-  "extractedText": "All text content extracted from the image, preserving formatting where possible. Pay special attention to names, account numbers, IBANs, dates, and banking product references.",
+  "extractedText": "All text content extracted from the image, preserving formatting where possible. Pay special attention to names, account numbers, IBANs, dates, address information, and banking product references.",
   "summary": "Brief summary of the document content and purpose",
   "clientIdentification": {
     "names": ["List all person names found in the document"],
     "accountNumbers": ["List all account numbers, IBANs, or banking references found"],
     "dates": ["List all dates found, especially birth dates or account opening dates"],
-    "bankingProducts": ["List any banking products mentioned (checking, savings, investment, pension, etc.)"]
+    "bankingProducts": ["List any banking products mentioned (checking, savings, investment, pension, etc.)"],
+    "addressInfo": {
+      "oldAddress": "Previous address if address change is mentioned",
+      "newAddress": "New address if address change is mentioned",
+      "addressChangeIndicators": ["List any words/phrases indicating address change: moved, relocated, new address, change of address, etc."]
+    }
   },
   "keyPoints": ["key point 1", "key point 2", "key point 3"],
   "clientNeeds": ["identified need 1", "identified need 2"],
@@ -355,6 +366,18 @@ Please examine the image and provide your analysis in the following JSON structu
       "data": {
         "noteContent": "Detailed note content based on document analysis",
         "category": "follow-up|compliance|risk|investment"
+      }
+    },
+    {
+      "type": "PROCESS_ADDRESS_CHANGE",
+      "priority": "high|medium|low",
+      "description": "Process client address change",
+      "data": {
+        "oldAddress": "Previous address",
+        "newAddress": "New address",
+        "effectiveDate": "YYYY-MM-DD",
+        "verificationRequired": true,
+        "documentationNeeded": ["proof of address", "updated ID"]
       }
     },
     {
@@ -375,16 +398,19 @@ Focus on:
 2. Identifying any names (first names, last names, full names)
 3. Finding account numbers, IBANs, or any banking references (format: CH XXXX XXXX XXXX XX XX)
 4. Extracting dates, particularly birth dates or account opening dates
-5. Noting any banking products mentioned (checking, savings, investment accounts, etc.)
-6. Understanding the document's purpose and context
-7. Identifying client needs and concerns
-8. Suggesting appropriate banking/financial advisor actions
-9. Flagging any compliance or risk issues
+5. **DETECTING ADDRESS CHANGES**: Look for phrases like "moved to", "new address", "address change", "relocated", "changed residence"
+6. Extracting old and new address information if address change is mentioned
+7. Noting any banking products mentioned (checking, savings, investment accounts, etc.)
+8. Understanding the document's purpose and context
+9. Identifying client needs and concerns
+10. Suggesting appropriate banking/financial advisor actions including address change processing
+11. Flagging any compliance or risk issues
 
 Pay special attention to Swiss banking formats:
 - Account numbers: CH followed by numbers and spaces
 - IBANs: CH followed by 2 digits and account details
 - Dates in formats: DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD
+- Swiss addresses: Street number, postal code, city format
 
 Respond only with valid JSON. Do not include any other text or explanations.`;
   }
@@ -456,6 +482,13 @@ Please provide your analysis in the following JSON structure:
     "factors": ["risk factor 1", "risk factor 2"]
   },
   "complianceFlags": ["compliance issue 1", "compliance issue 2"],
+  "addressChangeDetected": {
+    "hasAddressChange": false,
+    "oldAddress": "",
+    "newAddress": "",
+    "changeIndicators": [],
+    "confidence": "low|medium|high"
+  },
   "suggestedActions": [
     {
       "type": "CREATE_CLIENT_NOTE",
@@ -464,6 +497,19 @@ Please provide your analysis in the following JSON structure:
       "data": {
         "noteContent": "Detailed note content",
         "category": "follow-up|compliance|risk|investment"
+      }
+    },
+    {
+      "type": "PROCESS_ADDRESS_CHANGE",
+      "priority": "high|medium|low", 
+      "description": "Process client address change",
+      "data": {
+        "oldAddress": "Previous client address",
+        "newAddress": "New client address",
+        "effectiveDate": "YYYY-MM-DD",
+        "verificationRequired": true,
+        "documentationNeeded": ["proof of address", "updated ID", "utility bill"],
+        "complianceSteps": ["update KYC", "verify new address", "update correspondence address"]
       }
     },
     {
@@ -497,6 +543,15 @@ Please provide your analysis in the following JSON structure:
   ]
 }
 
+**IMPORTANT**: Pay special attention to detecting address changes in the document. Look for phrases like:
+- "moved to", "relocated to", "new address", "address change"
+- "changed residence", "new home", "different address"
+- Mentions of old vs new street addresses, cities, postal codes
+- References to updating address information
+- Moving notifications or change of address requests
+
+If you detect an address change, set "hasAddressChange" to true and include a PROCESS_ADDRESS_CHANGE action with high priority.
+
 Respond only with valid JSON. Do not include any other text or explanations.`;
   }
 
@@ -523,7 +578,10 @@ Respond only with valid JSON. Do not include any other text or explanations.`;
         try {
           const parsed = JSON.parse(jsonStr);
           console.log("✅ Successfully parsed JSON response");
-          return parsed;
+
+          // Process address change detection
+          const processedAnalysis = this.processAddressChangeDetection(parsed);
+          return processedAnalysis;
         } catch (parseError) {
           console.log(`⚠️ JSON parse error: ${parseError.message}`);
           console.log(`🔍 Attempting to extract text content from response...`);
@@ -538,6 +596,93 @@ Respond only with valid JSON. Do not include any other text or explanations.`;
     } catch (error) {
       console.error("Error parsing Ollama response:", error.message);
       return this.createFallbackAnalysis(response);
+    }
+  }
+
+  processAddressChangeDetection(analysis) {
+    try {
+      console.log("🏠 Processing address change detection...");
+
+      // Check if addressChangeDetected exists and has address change
+      if (analysis.addressChangeDetected && analysis.addressChangeDetected.hasAddressChange) {
+        console.log("✅ Address change detected in analysis");
+
+        // Ensure PROCESS_ADDRESS_CHANGE action is included
+        const hasAddressChangeAction = analysis.suggestedActions?.some((action) => action.type === "PROCESS_ADDRESS_CHANGE");
+
+        if (!hasAddressChangeAction) {
+          console.log("➕ Adding PROCESS_ADDRESS_CHANGE action");
+          analysis.suggestedActions = analysis.suggestedActions || [];
+          analysis.suggestedActions.unshift({
+            type: "PROCESS_ADDRESS_CHANGE",
+            priority: "high",
+            description: "Process detected client address change",
+            data: {
+              oldAddress: analysis.addressChangeDetected.oldAddress || "Address from client records",
+              newAddress: analysis.addressChangeDetected.newAddress || "New address to be verified",
+              effectiveDate: new Date().toISOString().split("T")[0],
+              verificationRequired: true,
+              documentationNeeded: ["proof of address", "updated ID", "utility bill"],
+              complianceSteps: ["update KYC", "verify new address", "update correspondence address", "notify relevant departments"],
+            },
+          });
+        }
+
+        // Add compliance flag if not present
+        analysis.complianceFlags = analysis.complianceFlags || [];
+        if (!analysis.complianceFlags.includes("Address change requires verification")) {
+          analysis.complianceFlags.push("Address change requires verification");
+        }
+      }
+
+      // Also check extracted text for address change indicators
+      const textToCheck = (analysis.extractedText || "").toLowerCase();
+      const addressChangeKeywords = ["moved to", "relocated to", "new address", "address change", "change of address", "changed residence", "new home", "different address", "moving to", "relocated from", "previous address", "former address", "current address", "umzug", "adressänderung"];
+
+      const foundKeywords = addressChangeKeywords.filter((keyword) => textToCheck.includes(keyword));
+
+      if (foundKeywords.length > 0 && (!analysis.addressChangeDetected || !analysis.addressChangeDetected.hasAddressChange)) {
+        console.log(`🏠 Address change keywords detected: ${foundKeywords.join(", ")}`);
+
+        // Add address change detection info
+        analysis.addressChangeDetected = {
+          hasAddressChange: true,
+          oldAddress: "Address from client records",
+          newAddress: "New address mentioned in document",
+          changeIndicators: foundKeywords,
+          confidence: foundKeywords.length > 2 ? "high" : "medium",
+        };
+
+        // Add PROCESS_ADDRESS_CHANGE action if not present
+        const hasAddressChangeAction = analysis.suggestedActions?.some((action) => action.type === "PROCESS_ADDRESS_CHANGE");
+
+        if (!hasAddressChangeAction) {
+          analysis.suggestedActions = analysis.suggestedActions || [];
+          analysis.suggestedActions.unshift({
+            type: "PROCESS_ADDRESS_CHANGE",
+            priority: "high",
+            description: `Process address change - detected keywords: ${foundKeywords.join(", ")}`,
+            data: {
+              oldAddress: "Previous address from client records",
+              newAddress: "New address to be extracted and verified",
+              effectiveDate: new Date().toISOString().split("T")[0],
+              verificationRequired: true,
+              documentationNeeded: ["proof of address", "updated ID", "utility bill"],
+              complianceSteps: ["update KYC", "verify new address", "update correspondence address", "notify compliance team"],
+              detectedKeywords: foundKeywords,
+            },
+          });
+
+          // Add compliance flag
+          analysis.complianceFlags = analysis.complianceFlags || [];
+          analysis.complianceFlags.push("Address change detected - verification required");
+        }
+      }
+
+      return analysis;
+    } catch (error) {
+      console.error("Error processing address change detection:", error.message);
+      return analysis; // Return original analysis if processing fails
     }
   }
 

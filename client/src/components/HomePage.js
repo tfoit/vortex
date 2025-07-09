@@ -350,6 +350,124 @@ const HomePage = () => {
             )}
           </div>
 
+          {/* Current Session Status */}
+          {/* Debug: Always show for testing - remove this condition later */}
+          {true && (
+            <div className="mb-8">
+              <h4 className="text-sm font-medium text-gray-900 mb-4 uppercase tracking-wide">Current Session</h4>
+              <div className="bg-gray-50 rounded-lg p-4">
+                {/* Debug Info */}
+                <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                  <div className="font-medium text-yellow-800 mb-1">Debug Info:</div>
+                  <div className="text-yellow-700">
+                    <div>activeSession: {activeSession ? `${activeSession.id.slice(-8)}` : "null"}</div>
+                    <div>isProcessing: {isProcessing ? "true" : "false"}</div>
+                    <div>processingDocument: {processingDocument ? "true" : "false"}</div>
+                    <div>sessions.length: {sessions.length}</div>
+                  </div>
+                </div>
+
+                {/* Session Info */}
+                {activeSession && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="font-medium text-sm text-gray-900 truncate">{activeSession.fileName || activeSession.documents?.[0]?.filename || "Document Session"}</h5>
+                      <span className="text-xs text-gray-500">{activeSession.id.slice(-8)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500">{new Date(activeSession.timestamp || activeSession.createdAt).toLocaleString()}</p>
+                  </div>
+                )}
+
+                {/* Processing Status */}
+                {isProcessing || processingDocument ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-900">Processing</span>
+                      <span className="text-xs text-blue-600 font-medium">{Math.round(uploadProgress)}%</span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }}></div>
+                    </div>
+
+                    {/* Current Stage */}
+                    <div className="text-xs text-gray-600">{processingStage}</div>
+
+                    {/* Processing Steps */}
+                    <div className="space-y-2 mt-3">
+                      <div className={`flex items-center space-x-2 text-xs transition-all duration-300 ${stageStatus.sessionCreated ? "text-green-600" : "text-gray-400"}`}>
+                        {stageStatus.sessionCreated ? <CheckCircle className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full bg-gray-300"></div>}
+                        <span>Session Setup</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 text-xs transition-all duration-300 ${stageStatus.visionCompleted ? "text-green-600" : "text-gray-400"}`}>
+                        {stageStatus.visionCompleted ? <CheckCircle className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full bg-gray-300"></div>}
+                        <span>Vision Processing</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 text-xs transition-all duration-300 ${stageStatus.aiCompleted ? "text-green-600" : "text-gray-400"}`}>
+                        {stageStatus.aiCompleted ? <CheckCircle className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full bg-gray-300"></div>}
+                        <span>AI Analysis</span>
+                      </div>
+                      <div className={`flex items-center space-x-2 text-xs transition-all duration-300 ${stageStatus.reviewReady ? "text-green-600" : "text-gray-400"}`}>
+                        {stageStatus.reviewReady ? <CheckCircle className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full bg-gray-300"></div>}
+                        <span>Ready for Review</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : activeSession ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-green-600">Complete</span>
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    </div>
+
+                    {/* Session Stats */}
+                    {activeSession.analysis && (
+                      <div className="space-y-2">
+                        {activeSession.analysis.documentType && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Document Type</span>
+                            <span className="text-gray-700 font-medium">{activeSession.analysis.documentType}</span>
+                          </div>
+                        )}
+                        {activeSession.suggestedActions && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Actions Identified</span>
+                            <span className="text-gray-700 font-medium">{activeSession.suggestedActions.length}</span>
+                          </div>
+                        )}
+                        {activeSession.documents?.[0]?.size && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">File Size</span>
+                            <span className="text-gray-700 font-medium">{formatFileSize(activeSession.documents[0].size)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Quick Actions */}
+                    <div className="pt-2 border-t border-gray-200">
+                      <button
+                        onClick={() => {
+                          navigate(`/session/${activeSession.id}`);
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full text-xs bg-red-600 text-white py-2 px-3 rounded-md hover:bg-red-700 transition-colors"
+                      >
+                        View Analysis
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500">No active session</p>
+                    <p className="text-xs text-gray-400 mt-1">Upload a document to start</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* System Status */}
           <div>
             <h4 className="text-sm font-medium text-gray-900 mb-4 uppercase tracking-wide">System Status</h4>
@@ -495,7 +613,8 @@ const HomePage = () => {
                   <Camera className="w-4 h-4 mr-2" />
                   Use Camera
                 </button>
-                <button
+                {/* Voice Chat button temporarily hidden */}
+                {/* <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowVoiceChat(true);
@@ -504,7 +623,7 @@ const HomePage = () => {
                 >
                   <Mic className="w-4 h-4 mr-2" />
                   Voice Chat
-                </button>
+                </button> */}
               </div>
               <input id="file-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.txt" onChange={handleFileSelect} />
             </div>
@@ -512,12 +631,13 @@ const HomePage = () => {
             {/* Supported Options */}
             <div className="mt-8 text-center space-y-2">
               <p className="text-sm text-gray-500">Supports PDF, images, and handwritten notes</p>
-              <p className="text-xs text-blue-600">
+              {/* Voice Chat description temporarily hidden */}
+              {/* <p className="text-xs text-blue-600">
                 <span className="inline-flex items-center space-x-1">
                   <Mic className="w-3 h-3" />
                   <span>Voice Chat: Open new bank accounts with AI assistant</span>
                 </span>
-              </p>
+              </p> */}
             </div>
           </div>
         ) : (
